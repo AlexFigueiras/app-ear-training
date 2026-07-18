@@ -1,0 +1,22 @@
+#!/bin/sh
+# Módulo 13 (adaptado) — valida Conventional Commits (tipo(escopo?): descrição).
+# Validador zero-dependência (regex em shell), mesmo mecanismo de hooks do módulo 10.
+commit_msg_file="$1"
+first_line=$(head -n 1 "$commit_msg_file")
+
+# Ignora commits de merge automáticos
+case "$first_line" in
+  "Merge "*) exit 0 ;;
+esac
+
+pattern='^(feat|fix|chore|refactor|docs|test|perf|ci|build)(\([a-zA-Z0-9_.-]+\))?!?: .+'
+
+if ! echo "$first_line" | grep -Eq "$pattern"; then
+  echo "❌ Mensagem de commit fora do padrão Conventional Commits."
+  echo "   Esperado: tipo(escopo?): descrição"
+  echo "   Tipos válidos: feat|fix|chore|refactor|docs|test|perf|ci|build"
+  echo "   Recebido: $first_line"
+  exit 1
+fi
+
+exit 0

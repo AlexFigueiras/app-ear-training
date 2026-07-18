@@ -1,3 +1,11 @@
+# Environment / secrets (ver docs/DECISIONS.md — incidente 2026-07-18)
+.env
+.env.*
+!.env.example
+
+# Rascunhos efêmeros de agentes (Poluição Zero, ver AGENTS.md)
+/scratch/
+
 # Miscellaneous
 *.class
 *.log

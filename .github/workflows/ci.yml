@@ -7,6 +7,18 @@ on:
     branches: [main]
 
 jobs:
+  secret-scan:
+    name: Secret scan (histórico)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   flutter:
     name: Analyze & Test
     runs-on: ubuntu-latest
@@ -33,14 +45,37 @@ jobs:
         run: flutter pub get
 
       - name: Verify formatting
-        run: dart format --output=none --set-exit-if-changed lib test
+        run: dart format --output=none --set-exit-if-changed lib test tool
         continue-on-error: true
+        # NÃO endurecido para gate duro neste bootstrap: rodar `dart format` de verdade reformata
+        # 29 dos 33 arquivos de lib/ hoje (whitespace apenas, mas é um diff que toca todo lib/,
+        # fora do escopo "não tocar em lib/" deste bootstrap). Reformatar o repo é um item
+        # follow-up isolado e explícito — ver docs/STATUS.md. Continua non-blocking até lá.
 
       - name: Analyze
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+        run: flutter analyze
+        # Endurecido de propósito (sem --no-fatal-infos/--no-fatal-warnings): flutter analyze
+        # JÁ encontrou 2 erros reais pré-existentes em lib/ui/screens/training_dashboard.dart e
+        # test/widget_test.dart (não introduzidos por este bootstrap, não corrigidos aqui — ver
+        # docs/STATUS.md). Erros de análise SEMPRE falham o comando, com ou sem essas flags —
+        # removê-las não piora o estado atual, só para de mascarar warnings/infos futuros.
+
+      # MESMA trava do hook local (.githooks/pre-commit) — nenhuma divergência entre trava
+      # local e remota (módulo 11 do bootstrap adaptado, ver bootstrap/PLANO-VIABILIDADE-E-ADOCAO.md).
+      - name: Verify rules (tamanho de arquivo, secrets em código-fonte)
+        run: dart tool/verify_rules.dart
 
       - name: Run tests
-        run: flutter test
+        run: flutter test --coverage
+        # Limiar de cobertura enforced: ainda não configurado (módulo 12 — suíte real é débito
+        # registrado em docs/STATUS.md, não escrita neste bootstrap).
+
+      - name: Dependências desatualizadas (informativo)
+        run: flutter pub outdated
+        continue-on-error: true
+        # Não é um gate: pub não tem hoje um equivalente direto a `npm audit --audit-level=high`
+        # / `pip-audit` / `cargo audit`. Limitação registrada em AGENTS.md (Stack Adapter) e
+        # docs/DECISIONS.md — não inventamos um gate falso onde a ferramenta não existe.
 
   build-apk:
     name: Build Debug APK
