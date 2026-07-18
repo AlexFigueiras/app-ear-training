@@ -3,6 +3,11 @@
 **Status:** ATIVO
 **Role Responsável:** [ORQUESTRADOR]
 
+> **Nota de desambiguação (2026-07-18):** este arquivo é o SSOT de **produto** (design,
+> gamificação clínica). Não confundir com `/MASTER-PLAN.md` na raiz do repo, que rastreia o
+> progresso da **fundação de governança** (bootstrap Dev OS, ver `AGENTS.md`). Ver também
+> `#PROJECT_BRAIN.md`, que referencia este arquivo como Norte Estratégico.
+
 ## 1. Visão de Produto: Reabilitação Neural de elite
 O BOSYN é uma plataforma de treinamento auditivo de alta precisão focada em **Plasticidade Neural**, especificamente para a restauração da audição de frequências agudas e discriminação fonêmica. O produto abandona qualquer estética lúdica convencional em favor de uma autoridade clínica técnica.
 

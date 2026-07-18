@@ -1,0 +1,9 @@
+#!/bin/sh
+# Módulo 10 (adaptado) — pre-commit versionado (core.hooksPath .githooks, zero dependência nova).
+# Roda EXATAMENTE o mesmo comando que o CI (.github/workflows/ci.yml, módulo 11) — nenhuma
+# divergência entre trava local e remota. Ver AGENTS.md, Protocolo Multiagente.
+set -e
+
+echo "→ dart tool/verify_rules.dart"
+dart tool/verify_rules.dart
+
