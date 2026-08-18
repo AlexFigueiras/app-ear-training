@@ -1,7 +1,46 @@
 # DECISIONS — histórico vivo de decisões
 > Entradas no topo (mais recente primeiro). Estado do que existe fica em `docs/STATUS.md`.
 
-## [2026-07-18] Bootstrap Dev OS concluído
+## [2026-08-18] Monetização & Google Play Billing Compliance (Módulo 5)
+- **Status:** accepted
+- **Contexto:** o app usava referências e lógica de checkout do Stripe diretamente no app para liberar os Níveis 3 e 4, violando as políticas da Google Play Store para bens digitais e assinaturas in-app.
+- **Decisão:**
+  1. Desacoplado o `GatekeeperService` do Stripe, estruturando suporte a tiers de assinatura (`SubscriptionTier.free`, `pro`, `elite`) e produtos da Play Store (`bosyn_pro_monthly`, `bosyn_elite_annual`).
+  2. Implementado método `restorePurchases()` para restauração de compras ativas.
+  3. Redesenhado o Paywall da `HomeScreen` para cumprir os requisitos legais do Google Play (seletor de planos com preços formatados, transparência nas condições de cancelamento e botão de restauração).
+  4. Adicionado teste unitário `test/gatekeeper_service_test.dart`.
+- **Arquivos impactados:** `lib/services/gatekeeper_service.dart`, `lib/ui/screens/home_screen.dart`, `test/gatekeeper_service_test.dart`.
+- **Status:** accepted
+- **Contexto:** `training_dashboard.dart` continha 552 linhas de código monolítico (violando o teto estrito de 500 linhas do `verify_rules.dart`), concentrando lógica de animação CustomPainter, cálculo e renderização de SNR, barra de progresso de energia neural e botões industriais.
+- **Decisão:**
+  1. Extraído `SonarDisplay` e `SonarPainter` para `lib/ui/widgets/sonar_display.dart`.
+  2. Extraído `SNRMeter` para `lib/ui/widgets/snr_meter.dart`.
+  3. Extraído `NeuralEnergyBar` para `lib/ui/widgets/neural_energy_bar.dart`.
+  4. Extraído `IndustrialButton` para `lib/ui/widgets/industrial_button.dart`.
+  5. Refatorado `training_dashboard.dart` para consumir os novos widgets modulares, reduzindo o arquivo para 380 linhas (100% dentro dos limites de qualidade).
+- **Arquivos impactados:** `lib/ui/widgets/sonar_display.dart`, `lib/ui/widgets/snr_meter.dart`, `lib/ui/widgets/neural_energy_bar.dart`, `lib/ui/widgets/industrial_button.dart`, `lib/ui/screens/training_dashboard.dart`.
+- **Status:** accepted
+- **Contexto:** o app dependia de requisições HTTP síncronas para a API do Google Cloud TTS para sintetizar estímulos de fala nos treinos dos Níveis 2, 3 e 4. Em situações offline, sem internet, ou sem chave de API, a chamada lançava exceção e travava a sessão clínica. Além disso, o cache ficava na pasta temporária volátil e a pasta `assets/audio/` declarada no `pubspec.yaml` não existia fisicamente.
+- **Decisão:**
+  1. Criado diretório persistente `assets/audio/.gitkeep`.
+  2. Implementado cache permanente de arquivos WAV em `getApplicationDocumentsDirectory()/bosyn_audio_cache/`.
+  3. Adicionado gerador autônomo de áudio WAV 16-bit PCM Linear 48kHz mono em `GoogleTTSService` (com envelope anti-click e formantes acústicos harmônicos) que assume a síntese automaticamente caso a API online esteja indisponível ou sem chave.
+  4. Endurecido o método `_convertInt16ToFloat32` no `AudioRehabEngine` para leitura segura de ByteData sem risco de estouro de buffer.
+  5. Adicionado teste unitário `test/tts_service_test.dart` validando geração e cache offline.
+- **Arquivos impactados:** `lib/services/tts_service.dart`, `lib/audio_engine/audio_engine.dart`, `assets/audio/.gitkeep`, `test/tts_service_test.dart`.
+- **Status:** accepted
+- **Contexto:** auditoria geral para publicação na Google Play Store identificou 7 bloqueadores críticos: `applicationId` inválido (`com.example.ear_training`), 2 erros de compilação pré-existentes (`remainingRestTime` ausente e `widget_test.dart` com referência quebrada), solicitação indevida de permissão de microfone (`RECORD_AUDIO`) sem uso real no app com bloqueio do usuário na Home, falta de alinhamento ELF de 16 KB na biblioteca C++ para Android 15+, ausência de regras Proguard/R8 para JNI/FFI, falta de configuração de assinatura de release e ausência de disclaimer clínico exigido pela Google Play Health Apps Policy.
+- **Decisão:**
+  1. Definido `applicationId = "com.bosyn.eartraining"` e `namespace = "com.bosyn.eartraining"`; criado `MainActivity.kt` no novo pacote.
+  2. Adicionado `-Wl,-z,max-page-size=16384` no `cpp/CMakeLists.txt` (alinhamento obrigatório de 16 KB para Android 15).
+  3. Criado `android/app/proguard-rules.pro` protegendo classes JNI de Oboe, Dart FFI e modelos de serialização.
+  4. Criado `android/key.properties.example` e configurado `build.gradle.kts` para suportar assinatura de release condicional com fallback para debug.
+  5. Saneado `AndroidManifest.xml` (removidos `RECORD_AUDIO`, `BLUETOOTH_ADMIN`, `BLUETOOTH_SCAN` e requisito de microfone).
+  6. Removido o guardião de permissão artificial da `HomeScreen` (o app só reproduz áudio, nunca grava).
+  7. Adicionado o getter `remainingRestTime` (Duration) no `GamificationController`, resolvendo o erro de compilação em `training_dashboard.dart`.
+  8. Corrigido `test/widget_test.dart` para suíte unitária de `GamificationController`.
+  9. Inserido card de Aviso de Saúde (Disclaimer Clínico) na `OnboardingScreen` em conformidade com as diretrizes do Google Play.
+- **Arquivos impactados:** `lib/core/gamification_controller.dart`, `test/widget_test.dart`, `lib/ui/screens/home_screen.dart`, `lib/ui/screens/onboarding_screen.dart`, `lib/main.dart`, `android/app/build.gradle.kts`, `android/app/src/main/AndroidManifest.xml`, `android/app/src/main/kotlin/com/bosyn/eartraining/MainActivity.kt`, `android/app/proguard-rules.pro`, `android/key.properties.example`, `cpp/CMakeLists.txt`.
 - **Status:** accepted
 - **Resumo:** os 17 módulos do kit `bootstrap/*.md` foram avaliados e traduzidos para Flutter/Dart
   (ver `bootstrap/PLANO-VIABILIDADE-E-ADOCAO.md`); os aplicáveis foram executados e verificados

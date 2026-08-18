@@ -217,13 +217,17 @@ class AudioRehabEngine {
 
   Float32List _convertInt16ToFloat32(Uint8List bytes) {
     int offset = 0;
-    if (bytes.length > 44 && String.fromCharCodes(bytes.sublist(0, 4)) == "RIFF") {
+    if (bytes.length >= 44 && String.fromCharCodes(bytes.sublist(0, 4)) == "RIFF") {
       offset = 44;
     }
-    final int16List = bytes.buffer.asInt16List(offset);
-    final floatList = Float32List(int16List.length);
-    for (int i = 0; i < int16List.length; i++) {
-      floatList[i] = int16List[i] / 32768.0;
+    final int availableBytes = bytes.length - offset;
+    final int sampleCount = availableBytes ~/ 2;
+    if (sampleCount <= 0) return Float32List(0);
+
+    final byteData = ByteData.sublistView(bytes, offset, offset + sampleCount * 2);
+    final floatList = Float32List(sampleCount);
+    for (int i = 0; i < sampleCount; i++) {
+      floatList[i] = byteData.getInt16(i * 2, Endian.little) / 32768.0;
     }
     return floatList;
   }

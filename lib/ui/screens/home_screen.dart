@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/gamification_controller.dart';
 import '../../models/audiogram.dart';
@@ -23,9 +22,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
-  bool _hasPermissions = false;
-  bool _isPermanentlyDenied = false;
+class _HomeScreenState extends State<HomeScreen> {
   bool _isLoadingData = true;
 
   Audiogram? _audiogram;
@@ -34,22 +31,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    _checkPermissions();
     _loadUserData();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _checkPermissions();
-    }
   }
 
   Future<void> _loadUserData() async {
@@ -120,20 +102,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       controller.updateStreak(controller.currentStreak + 1);
     }
     // diff == 0 → treinou hoje → mantém streak atual
-  }
-
-  Future<void> _checkPermissions() async {
-    final mic = await Permission.microphone.status;
-    final bluetooth = await Permission.bluetoothConnect.status;
-    setState(() {
-      _hasPermissions = mic.isGranted && bluetooth.isGranted;
-      _isPermanentlyDenied = mic.isPermanentlyDenied || bluetooth.isPermanentlyDenied;
-    });
-  }
-
-  Future<void> _requestPermissions() async {
-    await [Permission.microphone, Permission.bluetoothConnect].request();
-    _checkPermissions();
   }
 
   Future<void> _navigateToLevel(BuildContext context, int level) async {
@@ -211,8 +179,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    if (!_hasPermissions) return _buildPermissionGuard();
-
     final controller = context.watch<GamificationController>();
 
     return Scaffold(
@@ -252,49 +218,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ],
                 ),
               ),
-      ),
-    );
-  }
-
-  Widget _buildPermissionGuard() {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(40.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.security, color: Color(0xFFE11D48), size: 64),
-              const SizedBox(height: 24),
-              const Text("ACESSO RESTRITO", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 4)),
-              const SizedBox(height: 16),
-              Text(
-                "A reabilitação neural exige acesso ao Microfone (para calibração) e ao Bluetooth (detecção de fones).",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12),
-              ),
-              const SizedBox(height: 40),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB), foregroundColor: Colors.white),
-                  onPressed: _isPermanentlyDenied ? openAppSettings : _requestPermissions,
-                  child: Text(_isPermanentlyDenied ? "ABRIR CONFIGURAÇÕES" : "AUTORIZAR ACESSO"),
-                ),
-              ),
-              if (_isPermanentlyDenied)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Text(
-                    "Acesso negado permanentemente. Habilite manualmente.",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.redAccent.withOpacity(0.7), fontSize: 10),
-                  ),
-                ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -489,43 +412,183 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _showPaywall(BuildContext context) {
+    SubscriptionPlan selectedPlan = SubscriptionPlan.availablePlans.first;
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1A1A1A),
-      shape: const BeveledRectangleBorder(),
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("BOSYN PRO REQUERIDO", style: TextStyle(color: Color(0xFF00FF41), fontSize: 20, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
-              const SizedBox(height: 12),
-              const Text(
-                "O treinamento avançado de Escalonamento Espacial e Efeito Coquetel exige processamento neural de alta densidade.",
-                style: TextStyle(color: Colors.white70, fontSize: 12),
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF141414),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    "PROTOCOLO CLÍNICO COMPLETO",
+                    style: TextStyle(
+                      color: Color(0xFF00FF41),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      fontFamily: 'monospace',
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    "Desbloqueie o Nível 3 (Atenção Espacial Binaural) e Nível 4 (Fala no Ruído Hostil / Efeito Coquetel) com telemetria avançada.",
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                  const SizedBox(height: 20),
+                  // Planos de Assinatura
+                  ...SubscriptionPlan.availablePlans.map((plan) {
+                    final bool isSelected = selectedPlan.id == plan.id;
+                    return GestureDetector(
+                      onTap: () => setModalState(() => selectedPlan = plan),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFF00FF41).withOpacity(0.08)
+                              : const Color(0xFF1E1E1E),
+                          border: Border.all(
+                            color: isSelected
+                                ? const Color(0xFF00FF41)
+                                : Colors.white12,
+                            width: isSelected ? 2 : 1,
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  plan.title,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    fontFamily: 'monospace',
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  plan.priceFormatted,
+                                  style: const TextStyle(
+                                    color: Color(0xFF00FF41),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Icon(
+                              isSelected
+                                  ? Icons.radio_button_checked
+                                  : Icons.radio_button_off,
+                              color: isSelected
+                                  ? const Color(0xFF00FF41)
+                                  : Colors.white30,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2563EB),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onPressed: () async {
+                        final success =
+                            await GatekeeperService().purchasePlan(selectedPlan);
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                          if (success) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("ACESSO PRO/ELITE ATIVADO COM SUCESSO!"),
+                              ),
+                            );
+                            _loadUserData();
+                          }
+                        }
+                      },
+                      child: const Text(
+                        "CONTINUAR COM GOOGLE PLAY",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: TextButton(
+                      onPressed: () async {
+                        final restored =
+                            await GatekeeperService().restorePurchases();
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                restored
+                                    ? "COMPRAS RESTAURADAS COM SUCESSO!"
+                                    : "NENHUMA ASSINATURA ATIVA ENCONTRADA.",
+                              ),
+                            ),
+                          );
+                          if (restored) _loadUserData();
+                        }
+                      },
+                      child: const Text(
+                        "Restaurar Compras",
+                        style: TextStyle(color: Colors.white38, fontSize: 11),
+                      ),
+                    ),
+                  ),
+                  const Center(
+                    child: Text(
+                      "Assinatura recorrente gerenciada pelo Google Play. Cancele a qualquer momento na Play Store.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white24, fontSize: 9),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 30),
-              SizedBox(
-                width: double.infinity,
-                height: 60,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB), foregroundColor: Colors.white, shape: const BeveledRectangleBorder()),
-                  onPressed: () async {
-                    debugPrint("Iniciando Stripe Checkout...");
-                    await Future.delayed(const Duration(seconds: 2));
-                    await GatekeeperService().upgradeToPro();
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("ACESSO ELITE ATIVADO!")));
-                    }
-                  },
-                  child: const Text("ATIVAR ACESSO ELITE", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );

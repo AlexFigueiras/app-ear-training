@@ -29,6 +29,15 @@ class GamificationController extends ChangeNotifier {
   bool get hasEnergy => _neuralEnergy > 0;
   // Recomendação suave (sem bloco duro): ≥2 sessões/dia = mínimo efetivo
   bool get recommendRest => _sessionsCompletedToday >= 2;
+  /// Tempo restante de recuperação em caso de esgotamento de energia neural
+  Duration get remainingRestTime {
+    if (_neuralEnergy > 0) return Duration.zero;
+    // Protocolo de recuperação de fadiga neural: janela de 4h
+    final now = DateTime.now();
+    final nextAvailable = DateTime(now.year, now.month, now.day, now.hour + 4);
+    final diff = nextAvailable.difference(now);
+    return diff.isNegative ? Duration.zero : diff;
+  }
   double get currentSNR => _currentSNR;
   double get maxNoiseThreshold => _maxNoiseThreshold;
 
