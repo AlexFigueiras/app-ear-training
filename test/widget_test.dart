@@ -1,30 +1,26 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:ear_training/main.dart';
+import 'package:ear_training/core/gamification_controller.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('GamificationController Tests', () {
+    test('Initial state of neural energy and XP', () {
+      final controller = GamificationController();
+      controller.resetEnergy();
+      expect(controller.neuralEnergy, 5);
+      expect(controller.hasEnergy, isTrue);
+      expect(controller.remainingRestTime, Duration.zero);
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    test('Consuming energy reduces count and calculates rest time', () {
+      final controller = GamificationController();
+      controller.resetEnergy();
+      for (int i = 0; i < 5; i++) {
+        controller.consumeEnergy();
+      }
+      expect(controller.neuralEnergy, 0);
+      expect(controller.hasEnergy, isFalse);
+      expect(controller.remainingRestTime.inMinutes, greaterThan(0));
+    });
   });
 }
+

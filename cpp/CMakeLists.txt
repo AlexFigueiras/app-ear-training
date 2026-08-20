@@ -40,3 +40,7 @@ target_link_libraries(dsp_audio_engine
     android
     oboe
 )
+
+# Compatibilidade obrigatória com páginas de 16 KB (Google Play Android 15+ Policy)
+target_link_options(dsp_audio_engine PRIVATE "-Wl,-z,max-page-size=16384")
+

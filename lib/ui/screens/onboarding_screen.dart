@@ -59,6 +59,11 @@ class OnboardingScreen extends StatelessWidget {
           decoration: _pageDecoration(),
         ),
         PageViewModel(
+          title: "AVISO DE SAÚDE",
+          body: "O BOSYN é uma ferramenta de treinamento neuro-acústico. Não é um dispositivo médico nem substitui avaliação clínica, exames audiológicos ou acompanhamento com médico otorrinolaringologista ou fonoaudiólogo.",
+          decoration: _pageDecoration(),
+        ),
+        PageViewModel(
           title: "CHECK DE HARDWARE",
           body: "Use fones de ouvido. Ajuste o volume até o tom de calibração estar confortável e nítido — nem alto demais, nem inaudível.",
           footer: _buildCalibrationControl(),

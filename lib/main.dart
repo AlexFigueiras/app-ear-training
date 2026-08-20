@@ -43,23 +43,27 @@ class EarTrainingApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final session = Supabase.instance.client.auth.currentSession;
-    if (session == null) return _buildMaterialApp(const AuthScreen());
+    try {
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session == null) return _buildMaterialApp(const AuthScreen());
 
-    return FutureBuilder(
-      future: Supabase.instance.client
-          .from('profiles')
-          .select('onboarding_completed')
-          .eq('user_id', session.user.id)
-          .single(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildMaterialApp(const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFF00FF41)))));
-        }
-        final isCompleted = snapshot.data?['onboarding_completed'] ?? false;
-        return _buildMaterialApp(isCompleted ? const HomeScreen() : const OnboardingScreen());
-      },
-    );
+      return FutureBuilder(
+        future: Supabase.instance.client
+            .from('profiles')
+            .select('onboarding_completed')
+            .eq('user_id', session.user.id)
+            .maybeSingle(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return _buildMaterialApp(const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFF00FF41)))));
+          }
+          final isCompleted = snapshot.data?['onboarding_completed'] ?? false;
+          return _buildMaterialApp(isCompleted ? const HomeScreen() : const OnboardingScreen());
+        },
+      );
+    } catch (_) {
+      return _buildMaterialApp(const AuthScreen());
+    }
   }
 
   Widget _buildMaterialApp(Widget home) {

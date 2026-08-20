@@ -1,0 +1,8 @@
+# Keystore configuration template for BOSYN Release Build
+# Copy this file to 'android/key.properties' and fill with your release keystore details.
+# DO NOT commit android/key.properties to version control!
+
+storePassword=YOUR_KEYSTORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=bosyn_key
+storeFile=../bosyn_release_keystore.jks
