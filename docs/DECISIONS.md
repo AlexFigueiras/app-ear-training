@@ -45,6 +45,9 @@
   - revisão do banco por fonoaudiólogo (frequência de uso, pronúncia do TTS, regionalismo do
     /s/ final, que no Rio soa [ʃ]);
   - confirmar no celular que as vozes B e C existem na conta do Google TTS (há fallback para A).
+- **Gotcha de histórico:** o commit `3c9dfc9` saiu só com a remoção de `phoneme_map.dart` (um
+  `git add` falhou por um caminho já removido do índice). Sozinho ele não compila. O commit
+  `c147bfa` traz o conteúdo da etapa; o histórico publicado não foi reescrito.
 
 ## [2026-10-04] Home e oferta do PRO revisadas pela auditoria de UX (F1 e E2)
 - **Status:** accepted
