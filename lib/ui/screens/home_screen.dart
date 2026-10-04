@@ -8,12 +8,13 @@ import '../../models/rehab_session.dart';
 import '../../screens/phonemic_discrimination_screen.dart';
 import '../../screens/spatial_attention_screen.dart';
 import '../../screens/speech_in_noise_screen.dart';
-import '../../screens/threshold_test_screen.dart';
+import '../../screens/hearing_test/hearing_test_flow.dart';
 import '../../screens/widgets/technical_dashboard.dart';
 import '../../services/gatekeeper_service.dart';
 import '../../services/supabase_service.dart';
 import 'account_screen.dart';
 import 'calibration_screen.dart';
+import 'home_widgets.dart';
 
 /// HOME SCREEN: Dashboard Central de Progressão [ORQUESTRADOR]
 class HomeScreen extends StatefulWidget {
@@ -25,6 +26,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _isLoadingData = true;
+  bool _hasPro = false;
 
   Audiogram? _audiogram;
   List<RehabSession> _rehabHistory = [];
@@ -51,6 +53,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ]);
 
       final audiograms = results[0] as List<Audiogram>;
+      final hasPro =
+          await GatekeeperService().checkAccess(3).catchError((_) => false);
       final gamData = results[1] as Map<String, dynamic>?;
       final history = results[2] as List<RehabSession>;
 
@@ -67,16 +71,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // Conta sessões de hoje para exibir progresso diário
       final today = DateTime.now();
-      final sessionsToday = history.where((s) =>
-        s.date.year == today.year &&
-        s.date.month == today.month &&
-        s.date.day == today.day
-      ).length;
+      final sessionsToday = history
+          .where((s) =>
+              s.date.year == today.year &&
+              s.date.month == today.month &&
+              s.date.day == today.day)
+          .length;
       controller.setSessionsCompletedToday(sessionsToday);
 
       setState(() {
         _audiogram = audiograms.isNotEmpty ? audiograms.first : null;
         _rehabHistory = history;
+        _hasPro = hasPro;
         _isLoadingData = false;
       });
     } catch (e) {
@@ -85,14 +91,17 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _calculateStreak(List<RehabSession> history, GamificationController controller) {
+  void _calculateStreak(
+      List<RehabSession> history, GamificationController controller) {
     if (history.isEmpty) {
       controller.updateStreak(0);
       return;
     }
 
-    final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
-    final lastSessionDate = DateTime(history.last.date.year, history.last.date.month, history.last.date.day);
+    final today =
+        DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    final lastSessionDate = DateTime(
+        history.last.date.year, history.last.date.month, history.last.date.day);
     final diff = today.difference(lastSessionDate).inDays;
 
     if (diff > 1) {
@@ -112,42 +121,26 @@ class _HomeScreenState extends State<HomeScreen> {
         context: context,
         builder: (_) => AlertDialog(
           backgroundColor: const Color(0xFF1E1E24),
-          title: const Text("Teste Auditivo Necessário", style: TextStyle(color: Colors.white)),
+          title: const Text("Primeiro, o teste de audição",
+              style: TextStyle(color: Colors.white)),
           content: const Text(
-            "Para personalizar seu treino, realize o teste auditivo primeiro.",
-            style: TextStyle(color: Colors.white70),
+            "O treino é ajustado ao seu jeito de ouvir. O teste leva uns 10 minutos; use fones de ouvido num lugar silencioso.",
+            style: TextStyle(color: Colors.white, fontSize: 16, height: 1.4),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancelar")),
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text("Agora não")),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text("Fazer Teste", style: TextStyle(color: Color(0xFF00FF41))),
+              child: const Text("Fazer o teste",
+                  style: TextStyle(color: Color(0xFF00FF41))),
             ),
           ],
         ),
       );
 
-      if (doTest == true && context.mounted) {
-        final result = await Navigator.of(context).push<Map<String, dynamic>>(
-          MaterialPageRoute(builder: (_) => const ThresholdTestScreen()),
-        );
-        if (result != null && context.mounted) {
-          final user = Supabase.instance.client.auth.currentUser;
-          if (user != null) {
-            final leftEar = List<AudiometryPoint>.from(result['left'] as List);
-            final rightEar = List<AudiometryPoint>.from(result['right'] as List);
-            final audiogram = Audiogram(
-              id: '',
-              patientId: user.id,
-              date: DateTime.now(),
-              leftEar: leftEar,
-              rightEar: rightEar,
-            );
-            await SupabaseService().saveAudiogram(audiogram);
-            setState(() => _audiogram = audiogram);
-          }
-        }
-      }
+      if (doTest == true && context.mounted) await _runHearingTest();
       return;
     }
 
@@ -155,7 +148,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!context.mounted) return;
 
     if (!hasAccess) {
-      _showPaywall(context);
+      showProComingSoonSheet(context);
       return;
     }
 
@@ -178,6 +171,37 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) _loadUserData();
   }
 
+  /// Abre o teste de audição e salva o resultado (HearingTestFlow, Etapa 4 do plano). Usado
+  /// pelo cartão de próximo passo, pelo aviso antes do primeiro treino e por "Refazer teste".
+  Future<void> _runHearingTest() async {
+    final audiogram = await HearingTestFlow.runAndSave(context);
+    if (audiogram != null && mounted) setState(() => _audiogram = audiogram);
+  }
+
+  /// Cartão de próximo passo: sem audiograma, ou com audiograma do teste antigo.
+  Widget? _buildNextStep() {
+    final audiogram = _audiogram;
+    if (audiogram == null) {
+      return NextStepCard(
+        title: 'Comece pelo teste de audição',
+        body: 'Leva uns 10 minutos e ajusta o treino ao seu jeito de ouvir. '
+            'Use fones de ouvido num lugar silencioso.',
+        actionLabel: 'Fazer o teste agora',
+        onPressed: _runHearingTest,
+      );
+    }
+    if (audiogram.isOutdated) {
+      return NextStepCard(
+        title: 'Refaça o teste de audição',
+        body: 'O teste foi melhorado e agora mede também os sons mais agudos. '
+            'Seu resultado atual é da versão antiga e pode estar errado. Leva uns 10 minutos.',
+        actionLabel: 'Refazer o teste agora',
+        onPressed: _runHearingTest,
+      );
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<GamificationController>();
@@ -186,38 +210,64 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: const Color(0xFF0A0A0A),
       body: SafeArea(
         child: _isLoadingData
-            ? const Center(child: CircularProgressIndicator(color: Color(0xFF00FF41)))
-            : Padding(
+            ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFF00FF41)))
+            : ListView(
+                // Rolável: em 360×640 ou com fonte grande nada fica cortado (achados E2/G3).
                 padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    GestureDetector(
-                      onLongPress: () {
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (_) => const TechnicalDashboard(),
-                        );
-                      },
-                      child: _buildMainHeader(controller),
-                    ),
+                children: [
+                  GestureDetector(
+                    onLongPress: () {
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) => const TechnicalDashboard(),
+                      );
+                    },
+                    child: _buildMainHeader(controller),
+                  ),
+                  const SizedBox(height: 20),
+                  if (_buildNextStep() case final nextStep?) ...[
+                    nextStep,
                     const SizedBox(height: 20),
-                    _buildProgressCard(controller),
-                    const SizedBox(height: 20),
-                    _buildDailyProgress(controller),
-                    const SizedBox(height: 16),
-                    const Text(
-                      "ACERTOS NAS ÚLTIMAS SESSÕES",
-                      style: TextStyle(color: Colors.white24, fontSize: 10, letterSpacing: 2),
+                  ],
+                  _buildProgressCard(controller),
+                  const SizedBox(height: 20),
+                  _buildDailyProgress(controller),
+                  const SizedBox(height: 16),
+                  const Text(
+                    "ACERTOS NAS ÚLTIMAS SESSÕES",
+                    style: TextStyle(
+                        color: Colors.white24, fontSize: 10, letterSpacing: 2),
+                  ),
+                  const SizedBox(height: 12),
+                  if (_rehabHistory.isEmpty)
+                    const EmptyProgressNote()
+                  else
+                    _buildEvolutionChart(),
+                  const SizedBox(height: 24),
+                  for (final level in TrainingLevel.all) ...[
+                    LevelCard(
+                      level: level,
+                      locked: level.level > 2 && !_hasPro,
+                      onTap: () => _navigateToLevel(context, level.level),
                     ),
                     const SizedBox(height: 12),
-                    _buildEvolutionChart(),
-                    const Spacer(),
-                    _buildStartButton(context),
                   ],
-                ),
+                  if (_audiogram != null && !_audiogram!.isOutdated)
+                    Center(
+                      child: TextButton.icon(
+                        style: TextButton.styleFrom(
+                            minimumSize: const Size(48, 48),
+                            foregroundColor: HomeColors.textSecondary),
+                        onPressed: _runHearingTest,
+                        icon: const Icon(Icons.hearing),
+                        label: const Text('Refazer teste de audição',
+                            style: TextStyle(fontSize: 15)),
+                      ),
+                    ),
+                ],
               ),
       ),
     );
@@ -227,43 +277,40 @@ class _HomeScreenState extends State<HomeScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("BOSYN — TREINO AUDITIVO", style: TextStyle(color: Colors.white38, letterSpacing: 5, fontSize: 10)),
-            const SizedBox(height: 8),
-            Text("STATUS: ${controller.acuityLevel}", style: const TextStyle(color: Color(0xFF00FF41), fontSize: 24, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
-            Container(height: 2, width: 120, color: const Color(0xFF00FF41).withValues(alpha: 0.5)),
-          ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("BOSYN — TREINO AUDITIVO",
+                  style: TextStyle(
+                      color: Colors.white38, letterSpacing: 5, fontSize: 10)),
+              const SizedBox(height: 8),
+              Text("STATUS: ${controller.acuityLevel}",
+                  style: const TextStyle(
+                      color: Color(0xFF00FF41),
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      fontFamily: 'monospace')),
+              Container(
+                  height: 2,
+                  width: 120,
+                  color: const Color(0xFF00FF41).withValues(alpha: 0.5)),
+            ],
+          ),
         ),
         Row(
           children: [
-            if (_audiogram == null)
-              IconButton(
-                onPressed: () async {
-                  final user = Supabase.instance.client.auth.currentUser;
-                  final result = await Navigator.of(context).push<Map<String, dynamic>>(
-                    MaterialPageRoute(builder: (_) => const ThresholdTestScreen()),
-                  );
-                  if (result != null && user != null && mounted) {
-                    final leftEar = List<AudiometryPoint>.from(result['left'] as List);
-                    final rightEar = List<AudiometryPoint>.from(result['right'] as List);
-                    final audiogram = Audiogram(id: '', patientId: user.id, date: DateTime.now(), leftEar: leftEar, rightEar: rightEar);
-                    await SupabaseService().saveAudiogram(audiogram);
-                    setState(() => _audiogram = audiogram);
-                  }
-                },
-                icon: const Icon(Icons.hearing, color: Color(0xFFFFBF00)),
-                tooltip: "Realizar Teste Auditivo",
-              ),
             IconButton(
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CalibrationScreen())),
+              onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const CalibrationScreen())),
               icon: const Icon(Icons.tune, color: Colors.white24),
               tooltip: "Calibrar Latência",
             ),
             IconButton(
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AccountScreen())),
-              icon: const Icon(Icons.account_circle_outlined, color: Colors.white38),
+              onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AccountScreen())),
+              icon: const Icon(Icons.account_circle_outlined,
+                  color: Colors.white38),
               tooltip: "Conta e Privacidade",
             ),
           ],
@@ -275,24 +322,35 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildProgressCard(GamificationController controller) {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: const Color(0xFF1A1A1A), border: Border.all(color: Colors.white12)),
+      decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          border: Border.all(color: Colors.white12)),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("XP ACUMULADO", style: TextStyle(color: Colors.white38, fontSize: 8)),
-              Text(controller.totalXP.toString().padLeft(6, '0'), style: const TextStyle(color: Colors.white, fontSize: 24, fontFamily: 'monospace')),
+              const Text("XP ACUMULADO",
+                  style: TextStyle(color: Colors.white38, fontSize: 8)),
+              Text(controller.totalXP.toString().padLeft(6, '0'),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontFamily: 'monospace')),
             ],
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              const Text("STREAK", style: TextStyle(color: Colors.white38, fontSize: 8)),
+              const Text("STREAK",
+                  style: TextStyle(color: Colors.white38, fontSize: 8)),
               Text(
                 "${controller.currentStreak} dias",
-                style: const TextStyle(color: Color(0xFF00FF41), fontSize: 16, fontFamily: 'monospace'),
+                style: const TextStyle(
+                    color: Color(0xFF00FF41),
+                    fontSize: 16,
+                    fontFamily: 'monospace'),
               ),
             ],
           ),
@@ -304,7 +362,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildDailyProgress(GamificationController controller) {
     final sessions = controller.sessionsCompletedToday;
-    final color = sessions >= 2 ? const Color(0xFF00FF41) : const Color(0xFF2563EB);
+    final color =
+        sessions >= 2 ? const Color(0xFF00FF41) : const Color(0xFF2563EB);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
@@ -316,10 +375,16 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Text(
             "SESSÕES HOJE: $sessions / 2",
-            style: TextStyle(color: color, fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold),
+            style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontFamily: 'monospace',
+                fontWeight: FontWeight.bold),
           ),
           if (controller.recommendRest)
-            const Text("META DIÁRIA ATINGIDA ✓", style: TextStyle(color: Color(0xFF00FF41), fontSize: 9, letterSpacing: 1)),
+            const Text("META DIÁRIA ATINGIDA ✓",
+                style: TextStyle(
+                    color: Color(0xFF00FF41), fontSize: 9, letterSpacing: 1)),
           if (!controller.recommendRest)
             Text(
               "${2 - sessions} sessão(ões) restante(s)",
@@ -331,7 +396,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildEvolutionChart() {
-    final recent = _rehabHistory.length > 10 ? _rehabHistory.sublist(_rehabHistory.length - 10) : _rehabHistory;
+    final recent = _rehabHistory.length > 10
+        ? _rehabHistory.sublist(_rehabHistory.length - 10)
+        : _rehabHistory;
     final spots = <FlSpot>[];
     for (int i = 0; i < recent.length; i++) {
       spots.add(FlSpot(i.toDouble(), recent[i].accuracy.clamp(0.0, 100.0)));
@@ -341,22 +408,29 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       height: 180,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: const Color(0xFF1A1A1A), border: Border.all(color: Colors.white12)),
+      decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          border: Border.all(color: Colors.white12)),
       child: LineChart(
         LineChartData(
-          gridData: const FlGridData(show: true, drawVerticalLine: false, horizontalInterval: 25),
+          gridData: const FlGridData(
+              show: true, drawVerticalLine: false, horizontalInterval: 25),
           titlesData: FlTitlesData(
             leftTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 30,
                 interval: 25,
-                getTitlesWidget: (v, _) => Text("${v.toInt()}%", style: const TextStyle(color: Colors.white24, fontSize: 8)),
+                getTitlesWidget: (v, _) => Text("${v.toInt()}%",
+                    style: const TextStyle(color: Colors.white24, fontSize: 8)),
               ),
             ),
-            bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            bottomTitles:
+                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles:
+                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles:
+                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           ),
           borderData: FlBorderData(show: false),
           minX: 0,
@@ -371,87 +445,13 @@ class _HomeScreenState extends State<HomeScreen> {
               barWidth: 3,
               isStrokeCapRound: true,
               dotData: const FlDotData(show: true),
-              belowBarData: BarAreaData(show: true, color: const Color(0xFF00FF41).withValues(alpha: 0.1)),
+              belowBarData: BarAreaData(
+                  show: true,
+                  color: const Color(0xFF00FF41).withValues(alpha: 0.1)),
             ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildStartButton(BuildContext context) {
-    return Column(
-      children: [
-        _buildLevelCard(context, 2, "CALIBRAÇÃO FONÊMICA", "ACESSO LIBERADO"),
-        const SizedBox(height: 12),
-        _buildLevelCard(context, 3, "ESCALONAMENTO ESPACIAL", "REQUER PRO", isLocked: true),
-        const SizedBox(height: 12),
-        _buildLevelCard(context, 4, "AMBIENTE HOSTIL [COQUETEL]", "REQUER PRO", isLocked: true),
-      ],
-    );
-  }
-
-  Widget _buildLevelCard(BuildContext context, int level, String title, String subtitle, {bool isLocked = false}) {
-    return InkWell(
-      onTap: () => _navigateToLevel(context, level),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF111111),
-          border: Border.all(color: isLocked ? Colors.white10 : const Color(0xFF2563EB).withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: TextStyle(color: isLocked ? Colors.white38 : Colors.white, fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
-                Text(subtitle, style: TextStyle(color: isLocked ? const Color(0xFFE11D48) : const Color(0xFF00FF41), fontSize: 8)),
-              ],
-            ),
-            Icon(isLocked ? Icons.lock_outline : Icons.play_arrow, color: isLocked ? Colors.white10 : const Color(0xFF00FF41), size: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Sem compra dentro do app por enquanto: venda de recurso digital na Play exige Google Play
-  // Billing com validação no servidor (ver docs/PLAY_STORE.md). Antes, este botão simulava um
-  // checkout e liberava o PRO sem cobrança — removido junto com o upgrade feito pelo cliente.
-  void _showPaywall(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1A1A1A),
-      shape: const BeveledRectangleBorder(),
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("BOSYN PRO — EM BREVE", style: TextStyle(color: Color(0xFF00FF41), fontSize: 20, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
-              const SizedBox(height: 12),
-              const Text(
-                "Os treinos de Escalonamento Espacial e Efeito Coquetel fazem parte do plano PRO, que ainda não está à venda. Avisaremos no app quando estiver disponível.",
-                style: TextStyle(color: Colors.white70, fontSize: 12),
-              ),
-              const SizedBox(height: 30),
-              SizedBox(
-                width: double.infinity,
-                height: 60,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB), foregroundColor: Colors.white, shape: const BeveledRectangleBorder()),
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("ENTENDI", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }

@@ -1,6 +1,61 @@
 # DECISIONS — histórico vivo de decisões
 > Entradas no topo (mais recente primeiro). Estado do que existe fica em `docs/STATUS.md`.
 
+## [2026-10-04] Home e oferta do PRO revisadas pela auditoria de UX (F1 e E2)
+- **Status:** accepted
+- **Contexto:** o usuário dividiu os achados da auditoria de UX: os cobertos pelo plano "treino
+  eficaz" (C1–C4, D1, D3, D5, E1, E3–E5, G1–G4) ficaram com aquele plano; esta frente pegou o
+  que ele não cobre. F1: os níveis 3 e 4 mostravam "REQUER PRO" e cadeado fixos no código
+  (`isLocked: true`), inclusive para quem tinha o plano, com 8 px e contraste 1,3:1, e a folha
+  do PRO usava jargão em 12 px. E2: o paciente novo não via próximo passo (só um ícone amarelo
+  sem texto), o gráfico vazio plotava um ponto falso em 0%, e a Home não rolava.
+- **Decisões:**
+  - Componentes novos em `lib/ui/screens/home_widgets.dart` (`NextStepCard`, `LevelCard`,
+    `EmptyProgressNote`, `showProComingSoonSheet`), para a Home não crescer.
+  - O estado de cada card vem de `GatekeeperService.checkAccess(3)` na carga da Home.
+  - Treinos com nome e descrição em linguagem comum: "Palavras parecidas", "De onde vem o
+    som", "Conversa no barulho". O card anuncia nome, descrição e situação ao leitor de tela.
+  - Aviso do PRO honesto enquanto não há venda: diz que ainda não está à venda e que nada é
+    cobrado sem confirmação na loja; `isScrollControlled` para o botão não ficar abaixo da
+    dobra em celulares pequenos. A tela de venda futura precisa de preço, renovação e
+    cancelamento (App Store 3.1.2, política de assinaturas da Google Play).
+  - Fluxo do teste unificado em `_runHearingTest()` (cartão de próximo passo, aviso antes do
+    primeiro treino e o novo "Refazer teste de audição"); sai o ícone amarelo do topo.
+  - Home em `ListView`, sem `Spacer`, para 360×640 e fonte em 200%.
+  - O arquivo da Home foi formatado com `dart format` (não estava), o que aumenta o diff.
+- **Verificação:** `flutter analyze` limpo; `dart tool/verify_rules.dart` passa;
+  `test/home_widgets_test.dart` (5 testes, inclusive 360×640 com fonte em 200%) e as suítes de
+  entrada e onboarding passam (23 testes) numa cópia sem `device_info_plus`. A Home inteira não
+  foi exercitada no navegador: ela importa o motor nativo, que não compila para web.
+- **Ajuste após a Etapa 4 do plano (8054357):** Home e onboarding passam a abrir o teste por
+  `HearingTestFlow.runAndSave` (sem lógica de salvar duplicada). O cartão de próximo passo
+  também aparece quando `Audiogram.isOutdated` ("Refaça o teste de audição"), e "Refazer teste
+  de audição" só aparece para audiograma atual. Textos alinhados ao teste novo: "uns 10
+  minutos", bipes e botão "Ouvi".
+
+## [2026-10-04] Onboarding revisado pela auditoria de UX (etapa B)
+- **Status:** accepted
+- **Contexto:** a etapa B da auditoria de UX tinha três achados. B1 (muro de permissões) já
+  tinha saído na prontidão para a Play, e B2 ("Pular teste" que abria o teste) na Etapa 1 do
+  plano "treino eficaz". Restava o B3: textos técnicos ("CHECK DE HARDWARE", "teste de limiar"),
+  instrução que citava um botão "INICIAR" inexistente, tom de teste sem perguntar se a pessoa
+  ouviu, e botões de pular/avançar com 10 px, contraste 2,06:1 e sem nome acessível.
+- **Decisões** (só `lib/ui/screens/onboarding_screen.dart`):
+  - Títulos e textos em linguagem comum, sem caixa alta nem monoespaçada, corpo com 17 px.
+  - "Prepare o fone": o botão "Tocar som de teste" mostra "Tocando…" e pergunta "Você ouviu o
+    som?"; em "Não ouvi", orienta a conferir o fone e o volume e tocar de novo.
+  - Página do teste explica a duração, que é um ouvido de cada vez e que a resposta é "Sim"
+    mesmo com som fraquinho, e que o resultado é uma estimativa, não um exame (ASHA 2005).
+  - Botões "Fazer o teste depois", "Próximo" e "Começar o teste" com nome para o leitor de tela,
+    área de toque de 48 dp e contraste AA; indicador de página com 3,9:1.
+  - Voltar do teste sem terminar continua concluindo o onboarding (a Home exige o teste antes do
+    primeiro treino), agora com aviso de que o teste pode ser feito depois, pela tela inicial.
+  - Ficam com a Etapa 4 do plano ("Teste auditivo confiável"): checagem automática de ambiente
+    silencioso e tom de treino dentro do teste, que dependem do protocolo do teste.
+- **Verificação:** `flutter analyze` limpo; `dart tool/verify_rules.dart` passa;
+  `test/onboarding_screen_test.dart` (4 testes, inclusive 360×640 com fonte em 200% sem
+  estouro de layout) passa numa cópia sem `device_info_plus`.
+
 ## [2026-10-04] Plano "treino eficaz" — Etapa 4 (teste auditivo confiável)
 - **Status:** accepted (aguardando CI + checklist no celular)
 - **Contexto:** o teste é a âncora do EQ e da seleção de palavras, mas:
