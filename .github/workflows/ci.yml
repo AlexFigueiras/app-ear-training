@@ -56,9 +56,19 @@ jobs:
         run: dart tool/verify_rules.dart
 
       - name: Run tests
-        run: flutter test --coverage --reporter github
-        # --reporter github: cada falha vira uma anotação no run (legível pela API pública,
-        # sem precisar abrir o log autenticado).
+        # Cada teste que falha vira uma anotação ::error:: com nome e mensagem, legível pela
+        # API pública (o log completo do job exige login).
+        run: |
+          status=0
+          flutter test --coverage --reporter json > test-results.jsonl || status=$?
+          jq -Rrs '
+            [split("\n")[] | fromjson? | select(type == "object")] as $events
+            | ($events | map(select(.type == "testStart") | {key: (.test.id | tostring), value: .test.name}) | from_entries) as $names
+            | $events[] | select(.type == "error")
+            | "::error title=\($names[.testID | tostring] // "teste")::\(.error | gsub("[\r\n]+"; " ") | .[0:900])"
+          ' test-results.jsonl
+          jq -Rrs '[split("\n")[] | fromjson? | select(type == "object" and .type == "done")] | .[0] // "sem evento done"' test-results.jsonl
+          exit $status
         # Limiar de cobertura enforced: ainda não configurado (módulo 12 — suíte real é débito
         # registrado em docs/STATUS.md, não escrita neste bootstrap).
 
