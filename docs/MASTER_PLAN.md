@@ -8,8 +8,8 @@
 > progresso da **fundação de governança** (bootstrap Dev OS, ver `AGENTS.md`). Ver também
 > `#PROJECT_BRAIN.md`, que referencia este arquivo como Norte Estratégico.
 
-## 1. Visão de Produto: Reabilitação Neural de elite
-O BOSYN é uma plataforma de treinamento auditivo de alta precisão focada em **Plasticidade Neural**, especificamente para a restauração da audição de frequências agudas e discriminação fonêmica. O produto abandona qualquer estética lúdica convencional em favor de uma autoridade clínica técnica.
+## 1. Visão de Produto: treino auditivo
+O BOSYN é um programa de **treino auditivo** focado na percepção de consoantes agudas (/s/, /f/, /ʃ/, /t/) e da fala no ruído. **Não é dispositivo médico e não recupera a audição:** treino não restaura limiar tonal (dano coclear); ele ensina a aproveitar melhor as pistas que ainda são audíveis. O ganho na tarefa treinada é consistente; a transferência para a fala do dia a dia é modesta e depende de pista audível, várias vozes, dificuldade adaptativa, feedback e dose (ver `docs/DECISIONS.md`, 2026-10-04).
 
 ## 2. Diretrizes de UI/UX: Industrial-Utilitária
 O design deve evocar instrumentos de precisão, simuladores de voo e painéis de telemetria médica.

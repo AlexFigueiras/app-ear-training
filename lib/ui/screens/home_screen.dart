@@ -209,7 +209,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     _buildDailyProgress(controller),
                     const SizedBox(height: 16),
                     const Text(
-                      "EVOLUÇÃO DA ACUIDADE (ÚLTIMAS SESSÕES)",
+                      "ACERTOS NAS ÚLTIMAS SESSÕES",
                       style: TextStyle(color: Colors.white24, fontSize: 10, letterSpacing: 2),
                     ),
                     const SizedBox(height: 12),
@@ -230,7 +230,7 @@ class _HomeScreenState extends State<HomeScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("BOSYN — REABILITAÇÃO NEURAL", style: TextStyle(color: Colors.white38, letterSpacing: 5, fontSize: 10)),
+            const Text("BOSYN — TREINO AUDITIVO", style: TextStyle(color: Colors.white38, letterSpacing: 5, fontSize: 10)),
             const SizedBox(height: 8),
             Text("STATUS: ${controller.acuityLevel}", style: const TextStyle(color: Color(0xFF00FF41), fontSize: 24, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
             Container(height: 2, width: 120, color: const Color(0xFF00FF41).withValues(alpha: 0.5)),

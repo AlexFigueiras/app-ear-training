@@ -1,5 +1,5 @@
 name: ear_training
-description: "Neural Plasticity-Based Auditory Rehabilitation App"
+description: "BOSYN — app de treino auditivo (não é dispositivo médico)"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -22,8 +22,6 @@ dependencies:
   crypto: ^3.0.7
   ffi: ^2.2.0
   shared_preferences: ^2.5.5
-  pdf: ^3.12.0
-  printing: ^5.14.3
   introduction_screen: ^4.0.0
   device_info_plus: ^13.0.0
 

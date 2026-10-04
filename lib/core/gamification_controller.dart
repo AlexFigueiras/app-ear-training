@@ -34,10 +34,7 @@ class GamificationController extends ChangeNotifier {
 
   /// Seleção Inteligente baseada no Audiograma [Fase 1]
   Map<String, dynamic>? getSmartPhoneme(List<dynamic> audiogramData) {
-    final List<Map<String, dynamic>> level2Stimuli = List<Map<String, dynamic>>.from(phonemeRehabData['level_2'])
-      // 'random_rehab' são placeholders ("Palavra1"/"Falsa1"), não palavras reais: nunca vão
-      // para o paciente (a TTS falaria "Palavra um" e as opções mostrariam "Falsa1").
-      ..removeWhere((s) => s['type'] == 'random_rehab');
+    final List<Map<String, dynamic>> level2Stimuli = List<Map<String, dynamic>>.from(phonemeRehabData['level_2']);
 
     // Filtra frequências com perda > 25dB
     final criticalFreqs = audiogramData.where((p) => (p['threshold'] as num) > 25).map((p) => p['frequency'] as int).toList();

@@ -23,7 +23,7 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
 
   double _currentSnr = 15.0; // Inicia facilitado (+15 dB SNR)
   int _currentTrial = 0;
-  // Dose mínima efetiva para efeito de neuroplasticidade
+  // 20 tentativas por sessão (provisório: a dose passa a ser por tempo na Etapa 7 do plano)
   static const int _maxTrials = 20;
   int _correctAnswers = 0;
   final DateTime _sessionStart = DateTime.now();

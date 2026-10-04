@@ -24,7 +24,7 @@ class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
   final GamificationController _gamification = GamificationController();
 
   int _currentTrial = 0;
-  // Dose mínima efetiva
+  // 20 tentativas por sessão (provisório: redesenho do módulo na Etapa 9 do plano)
   static const int _maxTrials = 20;
   int _correctAnswers = 0;
   final DateTime _sessionStart = DateTime.now();

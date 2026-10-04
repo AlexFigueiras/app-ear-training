@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:ear_training/core/app_config.dart';
 import 'package:ear_training/core/gamification_controller.dart';
-import 'package:ear_training/core/spatial_controller.dart';
 import 'package:ear_training/ui/screens/session_gate.dart';
 import 'package:ear_training/ui/screens/startup_error_screen.dart';
 import 'package:ear_training/services/supabase_service.dart';
@@ -50,7 +49,6 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => GamificationController()),
-        ChangeNotifierProvider(create: (_) => SpatialController()),
       ],
       child: const EarTrainingApp(),
     ),
@@ -63,7 +61,7 @@ class EarTrainingApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'BOSYN — Reabilitação auditiva',
+      title: 'BOSYN — Treino auditivo',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF0A0A0A),

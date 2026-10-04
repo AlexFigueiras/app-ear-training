@@ -15,13 +15,15 @@ class OnboardingScreen extends StatelessWidget {
 
   const OnboardingScreen({super.key, this.onCompleted});
 
-  Future<void> _completeOnboarding(BuildContext context) async {
+  /// [runTest] = false quando o usuário escolhe "Pular teste": conclui o onboarding sem abrir o
+  /// teste auditivo (a Home oferece o teste depois, antes do primeiro treino).
+  Future<void> _completeOnboarding(BuildContext context, {required bool runTest}) async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
 
     // Verifica se já tem audiograma. Se não tiver, conduz ao teste.
-    final existing = await SupabaseService().getPatientHistory(user.id);
-    if (existing.isEmpty && context.mounted) {
+    final existing = runTest ? await SupabaseService().getPatientHistory(user.id) : const [];
+    if (runTest && existing.isEmpty && context.mounted) {
       final result = await Navigator.of(context).push<Map<String, dynamic>>(
         MaterialPageRoute(builder: (_) => const ThresholdTestScreen()),
       );
@@ -66,8 +68,10 @@ class OnboardingScreen extends StatelessWidget {
           decoration: _pageDecoration(),
         ),
         PageViewModel(
-          title: "NEUROPLASTICIDADE",
-          body: "O BOSYN utiliza o método de 'Minimal Pairs' para remapear como seu cérebro processa frequências agudas perdidas. 2 sessões por dia, 5 dias por semana, 6-8 semanas.",
+          title: "COMO FUNCIONA",
+          body: "Você vai ouvir palavras parecidas, como \"sala\" e \"fala\", e escolher a que ouviu. "
+              "O treino ensina a aproveitar melhor os sons que você ainda ouve. Ele não recupera "
+              "a audição perdida. Treine um pouco todos os dias.",
           decoration: _pageDecoration(),
         ),
         PageViewModel(
@@ -82,8 +86,8 @@ class OnboardingScreen extends StatelessWidget {
           decoration: _pageDecoration(),
         ),
       ],
-      onDone: () => _completeOnboarding(context),
-      onSkip: () => _completeOnboarding(context),
+      onDone: () => _completeOnboarding(context, runTest: true),
+      onSkip: () => _completeOnboarding(context, runTest: false),
       showSkipButton: true,
       skip: const Text("PULAR TESTE", style: TextStyle(color: Colors.white24, fontSize: 10)),
       next: const Icon(Icons.arrow_forward, color: Color(0xFF00FF41)),

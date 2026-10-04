@@ -1,6 +1,44 @@
 # DECISIONS — histórico vivo de decisões
 > Entradas no topo (mais recente primeiro). Estado do que existe fica em `docs/STATUS.md`.
 
+## [2026-10-04] Plano "treino eficaz" — Etapa 1 (limpeza e promessas)
+- **Status:** accepted (aguardando CI + checklist no celular)
+- **Contexto:** havia código órfão que chama APIs do motor que mudam na Etapa 3, e um PDF
+  "clínico" com números inventados. O app também prometia o que o treino não faz ("remapear
+  frequências agudas perdidas"; "restauração da audição" no `docs/MASTER_PLAN.md`). E as skills
+  que orientam agentes prescreviam o desenho de DSP quebrado.
+- **Decisões:**
+  - **Código órfão removido:** `training_dashboard`, `mission_report_screen`, `pdf_service`
+    (com as deps `pdf`/`printing`), `spatial_controller` (e o provider em `main.dart`),
+    `performance_dashboard`, `rehab_trends_chart`, `phonemic_pair`, além dos 70 placeholders
+    de `phoneme_map.dart`.
+  - **Promessas trocadas por texto honesto:**
+    - página "COMO FUNCIONA" no onboarding: o treino "não recupera a audição perdida";
+    - Home: "TREINO AUDITIVO" e "ACERTOS NAS ÚLTIMAS SESSÕES";
+    - título do app e descrição do pubspec;
+    - §1 do `docs/MASTER_PLAN.md`;
+    - comentários que citavam evidência de dose inexistente.
+  - **"Pular teste"** conclui o onboarding sem abrir o teste. A Home já exige o teste antes do
+    primeiro treino.
+  - **Skills (`.agent/skills` e a cópia em `.claude/skills`):**
+    - `DSP_AUDIO_ENGINE` reescrita para a arquitetura-alvo: EQ de biquads por orelha, ruído
+      mixado depois do EQ, bypass para medição, regras de tempo real;
+    - `AUDIOLOGIA_CLINICA` ganhou um aviso de limites da evidência;
+    - removidos a tabela TR→ERP, o par homófono Sinto/Cinto e a descrição de γ<1 como
+      "expansão";
+    - o banco de pares passa a priorizar ponto de articulação e /s/ final.
+  - **Base de texto acessível:** `lib/ui/theme/bosyn_text.dart` (mínimo 14) e
+    `docs/GLOSSARIO_UI.md`.
+- **Arquivos impactados:** os removidos acima, `lib/main.dart`,
+  `lib/core/gamification_controller.dart`, `lib/core/phoneme_map.dart`,
+  `lib/ui/screens/onboarding_screen.dart`, `lib/ui/screens/home_screen.dart`, 3 telas de treino
+  (comentários), `pubspec.yaml`/`.lock`, `docs/MASTER_PLAN.md`, skills, `docs/STATUS.md`.
+- **Consequências:** o treino em si ainda não mudou (a memorização continua até a Etapa 5).
+- **Gotcha de histórico:** as remoções de arquivos desta etapa entraram por engano no commit de
+  CI `9cffee7`, porque estavam staged quando ele foi feito. Esse commit isolado não compila
+  (`main.dart` ainda importava `spatial_controller`). O commit da Etapa 1 restaura a
+  consistência. O histórico não foi reescrito porque o branch já estava publicado.
+
 ## [2026-10-04] Plano "treino eficaz" aprovado — Etapa 0 (base verde)
 - **Status:** accepted (Etapa 0 aguardando CI + checklist no celular)
 - **Contexto:** a análise do treino mostrou que ele não melhora a percepção de consoantes

@@ -21,7 +21,7 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
   final GamificationController _gamification = GamificationController();
 
   int _currentTrial = 0;
-  // Protocolo de dose: 25 trials/sessão (evidência: Sweetow & Sabes 2006)
+  // 25 tentativas por sessão (provisório: a dose passa a ser por tempo na Etapa 7 do plano)
   static const int _maxTrials = 25;
   int _correctAnswers = 0;
   final DateTime _sessionStart = DateTime.now();

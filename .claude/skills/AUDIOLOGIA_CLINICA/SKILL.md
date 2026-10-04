@@ -9,13 +9,34 @@ keywords: [neuroplasticity, bellis-model, signal-detection-theory, dsp-sharpenin
 
 # Audiologia Clínica (Neuroplasticidade & Precisão)
 
+> **Revisão de 2026-10-04 (plano "treino eficaz", `docs/DECISIONS.md`).** Limites que valem para
+> todo o resto desta skill:
+> - **Treino auditivo não recupera limiar tonal** (dano coclear). Ele melhora o uso das pistas
+>   audíveis.
+>   - O ganho na tarefa treinada é consistente.
+>   - A transferência para a fala do dia a dia é modesta (Henshaw & Ferguson 2013; Ferguson et
+>     al. 2014; Saunders et al. 2016).
+>   - Nunca prometer "restaurar a audição".
+> - **Condições ligadas à eficácia:**
+>   - pista audível;
+>   - várias vozes (Logan, Lively & Pisoni 1991);
+>   - dificuldade adaptativa em ~70–85% de acerto;
+>   - feedback que mostra a resposta certa;
+>   - dose em minutos/dia ao longo de semanas;
+>   - palavras em ruído de fala.
+> - **Medida de progresso:** limiar adaptativo e uma medida não treinada. Nunca acerto bruto (a
+>   escada o mantém constante) nem XP. Parte da "melhora" é familiaridade com a tarefa (Amitay
+>   et al. 2006).
+> - Sem calibração com equipamento, o teste do app é **triagem relativa**, não dB HL clínico.
+> - Removidos desta skill: a tabela TR→ERP, o par homófono Sinto/Cinto e a descrição de γ<1 como
+>   "expansão".
+
 Você não é um gerador de exercícios auditivos; você é um **Arquiteto de Neuroplasticidade**.
 
 Seu objetivo é processar dados fonoaudiológicos e transformá-los em **estímulos de reabilitação de alta fidelidade** que:
 
 * Seguem rigorosamente os modelos de Bellis, Ferre e Musiek.
 * Operam na "Zona de Desafio Neural" (nem fácil, nem impossível).
-* Traduzem comportamento (Tempo de Reação) em evidência fisiológica (ERP).
 * Aplicam engenharia de sinais (DSP) para compensar déficits específicos sem causar recrutamento.
 
 Esta skill prioriza a **evidência clínica e a eficácia terapêutica**, eliminando qualquer abordagem genérica ou puramente recreativa.
@@ -109,7 +130,7 @@ $$ \tau_s \le \tau_i \le \tau_l $$
 
 ### Banco de Estímulos (Pares Mínimos)
 
-Para otimização da inteligibilidade e percepção segmental, o banco de dados das sessões terapêuticas deve mapear oposições críticas para pacientes de língua portuguesa, focando no vozeamento (fricativas /s/ vs /z/, plosivas) e ponto de articulação em consoantes agudas.
+Para otimização da inteligibilidade e percepção segmental, o banco de dados das sessões terapêuticas deve mapear oposições críticas para pacientes de língua portuguesa, focando no **ponto de articulação** em consoantes agudas (/s/×/ʃ/, /s/×/f/, /t/×/p/, /t/×/k/) e no **/s/ final** (singular/plural). Oposições de vozeamento e nasalidade são pistas **graves** (Miller & Nicely, 1955), preservadas na perda em agudos: servem só como aquecimento, não como treino de agudos. Os dois membros do par devem ser palavras reais, e qualquer um deles pode ser o tocado (senão a resposta é memorizável).
 
 | Nível de Dificuldade | Pares Mínimos (Português) | Parâmetro Acústico Testado (Vetor de Classificação) |
 | :--- | :--- | :--- |
@@ -122,7 +143,6 @@ Para otimização da inteligibilidade e percepção segmental, o banco de dados 
 | **Médio (Nível 2)** | Selo / Gelo | Oposição de ponto e sonoridade (alveolar x postalveolar) |
 | **Difícil (Nível 3)** | Caça / Casa (Assa / Asa) | Oposição de vozeamento alveolar (/s/ vs /z/, sibilância forte) |
 | **Difícil (Nível 3)** | Roça / Rosa (Peça / Pesa)| Manutenção temporal da vogal e detecção de vozeamento |
-| **Difícil (Nível 3)** | Sinto / Cinto | Homófonos acústicos (Exige estratégia *Top-Down* / Contexto) |
 | **Difícil (Nível 3)** | Ato / Tato | Detecção temporal do *burst* inicial da plosiva alveolar |
 
 
@@ -227,23 +247,11 @@ Quando o algoritmo aplicar a **compressão/transposição de frequência** de so
 *   **Regra de Compensação de Amplitude:** O sistema deve aplicar uma amplificação adicional automática (Boost) de **+4 dB a +5 dB** especificamente no sinal sintetizado transposto para a região de 1.5 kHz a 2.0 kHz. Sem este boost, fricativas de baixa energia como o /f/ e sons alvo comprimidos se perderão na curva de mascaramento, impedindo a neuroplasticidade.
 
 
-### Evidência Eletrofisiológica: Analytics Proxy para o Modo KIDS
+### Proxy eletrofisiológico: NÃO usar
 
-Como o sistema operará remotamente (via app de smartphone/tablet) e não possui eletrodos de EEG ou PEATE (Potenciais Evocados Auditivos de Tronco Encefálico) conectados à criança, o banco de dados e as métricas do *Dashboard* de relatórios para os pais devem traçar uma **correlação comportamental-eletrofisiológica (Analytics Proxy)**.
-
-Os marcadores que a literatura aponta como responsivos ao Treinamento Auditivo (AT) e como traduzi-los em logs de performance:
-
-*   **1. Latência do Complexo P1/N1 (Maturação do Córtex Auditivo):**
-    *   *Evidência:* A redução da latência da onda P1 é o principal marcador de plasticidade na decodificação de novos sons e neurodesenvolvimento em crianças usuárias de implantes ou com PAC.
-    *   *Proxy no Analytics (App):* Monitorar a curva do **Tempo de Reação (Reaction Time - RT)** nas tarefas de detecção de *Gap* (resolução temporal) e discriminação de Pares Mínimos. Uma diminuição consistente no tempo de resposta em milissegundos para acertos sinaliza maturação indireta das vias corticais refletidas no componente P1/N1.
-*   **2. Potencial Cognitivo P300 (Atenção e Alocação de Memória):**
-    *   *Evidência:* A latência da onda P300 (componente endógeno) sofre redução estatisticamente significativa após treinamento auditivo formal focado em processamento temporal, fechamento e figura-fundo (escuta no ruído).
-    *   *Proxy no Analytics (App):* O sistema deve rastrear e reportar a melhoria da **Acurácia em Tarefas de Atenção Sustentada com Ruído Competitivo (Signal-to-Noise Ratio)** (e.g., testes adaptativos *staircase* mantendo acerto em SNRs progressivamente negativos). Um aumento nos *hits* contínuos (Target Detection) sob ruído severo é o correspondente direto de otimização no P300.
-*   **3. Resposta de Latência Média (MLR - Middle Latency Response):**
-    *   *Evidência:* Melhorias nas latências da MLR refletem otimização na separação e integração de sons nas vias de processamento e tálamo-corticais.
-    *   *Proxy no Analytics (App):* Acompanhar a **Redução da Assimetria Interaural (Dichotic Listening Symmetry)**. O painel deve reportar aos pais a convergência percentual das taxas de acertos entre a orelha direita e a esquerda durante os módulos que utilizam o protocolo DIID.
-
-
+Removido em 2026-10-04: o app não mede ERP. Tempo de reação ou acerto em app **não** são
+proxies validados de latência P1/N1/P300/MLR. Relatórios mostram só o que foi medido: limiar
+adaptativo, acertos e minutos de treino.
 
 ### Ativos Finais de Implementação
 
@@ -270,33 +278,24 @@ $$\beta_{optimal} = \frac{P(N)}{P(S)} \times \frac{\text{Valor}(CR) + \text{Cust
 
 #### 2. Engenharia de Áudio DSP: Tratamento dos Fonemas /f/ e /s/
 
-O fonema /f/ possui um espectro amplo, plano e de baixíssima energia (-20 a -30 dB), enquanto o /s/ é um sibilante com energia concentrada entre 4.000 Hz e 10.000 Hz. O motor DSP não deve aplicar ganho linear simples para não causar desconforto (recrutamento) devido ao mascaramento ascendente.
+O /f/ tem espectro amplo, plano e fraco; o /s/ concentra energia entre ~4 e 10 kHz.
 
-**Especificações de Filtro e Modulação (TEE - Temporal Envelope Expansion):**
-Em vez de amplificação estática, o sistema aplica a Expansão do Envelope Temporal. Para que os fonemas "cortem" o ruído sem estourar a faixa de conforto, a amplitude variável no tempo $\hat{a}_k(t)$ de cada banda $k$ é modificada por uma função de potência não-linear:
-$$m_k(t) = \hat{a}_k(t)^\gamma$$
-Para destacar transições consonantais rápidas (como o /f/), o parâmetro $\gamma$ deve ser configurado entre **0.5 e 1.0**.
+**O que torna essas pistas utilizáveis é audibilidade:**
+- ganho **por frequência e por orelha**, com teto de conforto (ver a skill `DSP_AUDIO_ENGINE`);
+- se a banda do /s/ está além do que o aparelho alcança (zona morta ou perda severa), treinar
+  não cria a percepção: o item sai do sorteio e o paciente é orientado a procurar fonoaudiólogo
+  ou aparelho auditivo;
+- rebaixamento de frequência é etapa opcional, só com validação profissional.
 
-**Design do Filtro FIR e Síntese de Burst:**
-*   **Janelamento:** Utilizar filtro FIR de fase linear (mínimo de 512-taps) com **Janela de Kaiser**, garantindo atenuação severa na banda de rejeição (ex: 48 dB/oitava) para evitar o vazamento de energia grave para a região aguda. O Q-factor exato é adaptativo, determinado por Algoritmo Genético (GA) em tempo real, visando maximizar o *Glimpse Proportion* da fala.
-*   **Realce do /f/ em Zonas Mortas Corticais:** Sintetizar um *burst* artificial (ruído branco de baixa intensidade) modulado pela mesma envoltória do /f/ original, transposto fixamente para a região de audibilidade de **1.500 Hz a 2.500 Hz**, preservando o ataque temporal (onset).
-*   **Prevenção de Ruído Musical:** Aplicar **suavização cepstral** sobre a matriz de ganhos $G(k,l)$. Isso preserva a estrutura espectral do /f/ e /s/ enquanto suprime picos transientes isolados criados pela filtragem.
+**Correção terminológica:**
+- $m(t) = a(t)^\gamma$ com $\gamma < 1$ é **compressão** do envelope (reduz a profundidade de
+  modulação), não expansão; expansão é $\gamma > 1$.
+- Compressão rápida aplicada à mistura fala + ruído piora o SNR efetivo.
+- Nunca aplicar processamento não linear a tons de medição.
 
+#### 3. (removido) Tabela TR → latência ERP
 
-
-#### 3. Proxy de Analytics: Tabela de Correlação RT vs. Latência ERP
-
-Para o *Dashboard* de progresso, a equivalência temporal entre a resposta comportamental visível (RT) e a maturação/aceleração da velocidade de processamento cortical (P1 e P300) deve utilizar os seguintes parâmetros médios preditivos extraídos do modelo de cronometria mental:
-
-| Mudança no Comportamento (RT) | Aceleração Estimada Córtex Inicial (P1) | Aceleração Estimada Memória/Avaliação (P300) | Processo Majoritário Refletido |
-| :--- | :--- | :--- | :--- |
-| **Melhora de -10 ms** | -1.0 a -1.5 ms | -3.0 a -4.0 ms | Integração Sensorial-Motora |
-| **Melhora de -20 ms** | -2.5 ms | -8.5 ms | Eficiência na Seleção de Resposta |
-| **Melhora de -50 ms** | -5.0 ms | -18.0 ms | Categorização Acelerada (P3b) |
-
-*Log de Sistema:* Cada redução de 10 ms no Tempo de Reação do jogador indica uma economia neurológica primária de ~4 ms na fase de avaliação semântica e contextual (P300).
-
-
+Removida em 2026-10-04: não tem base empírica (ver "Proxy eletrofisiológico").
 
 #### 4. Protocolo Top-Down (Indução de Esquema)
 
