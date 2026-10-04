@@ -16,14 +16,11 @@ set(CMAKE_CXX_STANDARD 17)
 # Adiciona a biblioteca compartilhada (JNI/FFI)
 add_library(dsp_audio_engine SHARED
     native_bridge.cpp
-    dsp_engine.cpp
+    audio_graph.cpp
     oboe_engine.cpp
-    fir_filter.cpp
-    pffft.c
 )
 
-# OTIMIZAÇÃO DE HARDWARE (ARM NEON & -O3) PARA PFFFT
-# Ativando flags de vetorização SIMD mandatórias
+# Otimização: -O3 (e NEON no ARMv7) para o EQ de biquads no callback de áudio.
 if(${ANDROID_ABI} STREQUAL "armeabi-v7a")
     target_compile_options(dsp_audio_engine PRIVATE -O3 -mfpu=neon)
 else()

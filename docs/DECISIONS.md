@@ -1,6 +1,63 @@
 # DECISIONS — histórico vivo de decisões
 > Entradas no topo (mais recente primeiro). Estado do que existe fica em `docs/STATUS.md`.
 
+## [2026-10-04] Plano "treino eficaz" — Etapa 3 (motor C++ consertado, mantido em C++)
+- **Status:** accepted (aguardando CI + checklist no celular)
+- **Contexto:** a cadeia nativa estava quebrada e distorcia até a medição.
+  - `pffft.c` era um placeholder de FFT.
+  - `PartitionedFIR` estourava `overlapBuffer` a cada bloco do callback (heap overflow).
+  - O "TEE" (γ=0,7) era um compressor rápido aplicado a tudo, inclusive aos tons do teste:
+    tons fracos ganhavam até +24 dB e a perda em agudos saía subestimada.
+  - O EQ era um único peaking na "pior" frequência, com a média das orelhas.
+  - Os ganhos do paciente eram um volume de banda larga com teto de 4×.
+  - O ruído passava pelo EQ, então o SNR não era o pedido.
+  - O `SamplePlayer` tinha corrida de dados (o Dart chamava `clear()` enquanto o áudio lia) e
+    `setLoop` não fazia nada.
+- **Decisão do usuário:** manter o motor em C++/Oboe e consertá-lo.
+- **Arquitetura nova** (`cpp/`, sem dependência nova):
+  - **Mixer:** `AudioGraph` (sem Oboe, testável no host). Alvo → EQ por orelha (ou bypass) →
+    pan; masker e ruído entram depois do EQ; limitador -1 dBFS no fim.
+  - **EQ:** `eq_bank.h`, EQ de 8 bandas (250 Hz–8 kHz) de biquads por orelha. O projeto ajusta
+    iterativamente os ganhos dos filtros para a resposta medida bater com o alvo.
+  - **Fontes de som:** `buffer_source.h` + `handoff.h`. Troca de buffer e de coeficientes por
+    ponteiro atômico: a thread de áudio nunca aloca nem libera. Loop real, fade de 5 ms ao
+    silenciar.
+  - **Limitador:** `safety_limiter.h`, ataque instantâneo, liberação de 50 ms. Conta os
+    acionamentos, que aparecem no painel.
+  - **Ponte FFI:** `set_eq_targets`, `set_dsp_bypass`, `get_limiter_hits`,
+    `reset_limiter_hits`, `get_target_frames_remaining`, `set_masker_gain`. Removidos
+    `set_test_tone`, `set_audiogram_profile` e `consume_soft_knee_flag`.
+  - **Apagados:** `dsp_engine.*`, `fir_filter.*`, `pffft.*`, `tee_processor.h`,
+    `sample_player.h`, `sine_oscillator.h`, `noise_generator.h`, `test_ringbuffer.cpp`.
+- **Dart:**
+  - `AudibilityProfile`: ganho por orelha = meio ganho da perda relativa à melhor frequência da
+    orelha, teto de 25 dB, com 3 k/6 k interpolados em escala log.
+  - O boost de dificuldade da Fonêmica vale só nas bandas ≥ 3 kHz (antes era volume de banda
+    larga).
+  - `SignalLevel` normaliza a fala a -30 dBFS RMS, e o ruído do Coquetel sai no SNR pedido,
+    inclusive abaixo de 0 dB.
+  - Tons de teste e de calibração usam bypass.
+  - Os lookups de FFI são guardados uma vez só.
+  - Painel técnico com QA de áudio (debug/profile): tons por orelha, a mesma palavra com e sem
+    EQ, contador do limitador.
+- **Desvio do plano:** o boost é composto em Dart e vai junto com o perfil em
+  `set_eq_targets`, em vez de um `set_high_band_boost_db` nativo. Fica um símbolo a menos e a
+  regra é testável em Dart.
+- **Testes:**
+  - `cpp/tests/eq_test.cpp`: erro ≤ 1,5 dB por banda em perfis descendente, entalhe em 4 k e
+    boost agudo.
+  - `graph_test.cpp`: bypass = identidade, EQ só no alvo, ruído fora do EQ, pan, limitador
+    ≤ -1 dBFS, silêncio com fade, loop sem emenda, zero alocação no render.
+  - `graph_threads_test.cpp`: estresse com duas threads, sob TSan.
+  - `test/audibility_profile_test.dart`.
+  - CI: os testes nativos rodam com ASan/UBSan e também com ThreadSanitizer.
+- **Consequências:**
+  - O audiograma antigo foi medido com o compressor e subestima a perda em agudos; a Etapa 4
+    pede reteste.
+  - O ruído do Coquetel segue branco até a Etapa 7.
+- **Nota de processo:** outra sessão (auditoria de UX, etapa B do onboarding) trabalha na mesma
+  pasta. O commit desta etapa inclui só os arquivos dela.
+
 ## [2026-10-04] Plano "treino eficaz" — Etapa 2 (áudio que sai errado)
 - **Status:** accepted (aguardando CI + checklist no celular; deploy da função `tts` é ação
   humana)

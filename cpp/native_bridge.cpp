@@ -1,185 +1,181 @@
 #include <stdint.h>
 #include <chrono>
 #include <cstdlib>
+#include "audio_graph.h"
 
 #ifdef __ANDROID__
 #include "oboe_engine.h"
 #define NATIVE_EXPORT __attribute__((visibility("default")))
-#else
-#include "dsp_engine.h"
+#elif defined(_WIN32)
 #define NATIVE_EXPORT __declspec(dllexport)
+#else
+#define NATIVE_EXPORT __attribute__((visibility("default")))
 #endif
 
+// Ponte C para o Dart FFI. Todo símbolo chamado em lib/audio_engine/native_engine.dart precisa
+// existir aqui (símbolo ausente = crash na hora da chamada).
+//
+// No Android o AudioGraph é tocado pelo Oboe. Fora dele (Windows/desktop) não há saída de áudio:
+// o grafo existe só para a API aceitar as chamadas.
 extern "C" {
 
 struct EngineContext {
 #ifdef __ANDROID__
-    OboeEngine* engine;
+    OboeEngine* engine = nullptr;
 #else
-    DspEngine* engine;
+    AudioGraph* graph = nullptr;
 #endif
 };
 
-NATIVE_EXPORT
-EngineContext* create_engine() {
-    EngineContext* ctx = new EngineContext();
+static AudioGraph* graphOf(EngineContext* ctx) {
+    if (ctx == nullptr) return nullptr;
+#ifdef __ANDROID__
+    return ctx->engine ? &ctx->engine->graph() : nullptr;
+#else
+    return ctx->graph;
+#endif
+}
+
+NATIVE_EXPORT EngineContext* create_engine() {
+    auto* ctx = new EngineContext();
 #ifdef __ANDROID__
     ctx->engine = new OboeEngine();
 #else
-    ctx->engine = new DspEngine(48000.0f);
+    ctx->graph = new AudioGraph(48000.0f);
 #endif
     return ctx;
 }
 
-// Hook de Ignição Nativa (Inicia o MMAP Oboe no Android)
-NATIVE_EXPORT
-bool start_engine(EngineContext* ctx) {
+NATIVE_EXPORT bool start_engine(EngineContext* ctx) {
 #ifdef __ANDROID__
-    if (ctx && ctx->engine) {
-        return ctx->engine->start();
-    }
+    if (ctx && ctx->engine) return ctx->engine->start();
 #endif
-    return true; // No Windows simulamos sucesso imediato
+    (void)ctx;
+    return true;
 }
 
-// Hook de Pausa Nativa
-NATIVE_EXPORT
-void stop_engine(EngineContext* ctx) {
+NATIVE_EXPORT void stop_engine(EngineContext* ctx) {
 #ifdef __ANDROID__
-    if (ctx && ctx->engine) {
+    if (ctx && ctx->engine) ctx->engine->stop();
+#endif
+    (void)ctx;
+}
+
+NATIVE_EXPORT void destroy_engine(EngineContext* ctx) {
+    if (ctx == nullptr) return;
+#ifdef __ANDROID__
+    if (ctx->engine) {
         ctx->engine->stop();
+        delete ctx->engine;
     }
+#else
+    delete ctx->graph;
 #endif
+    delete ctx;
 }
 
-// Cleanup Determinístico (via NativeFinalizer)
-NATIVE_EXPORT
-void destroy_engine(EngineContext* ctx) {
-    if (ctx) {
-        if (ctx->engine) {
-#ifdef __ANDROID__
-            ctx->engine->stop();
-#endif
-            delete ctx->engine;
-        }
-        delete ctx;
-    }
+// --- Estímulos ---
+
+NATIVE_EXPORT void set_target_sample(EngineContext* ctx, float* data, int32_t len, float vol, int32_t loop) {
+    (void)loop; // o alvo nunca toca em loop
+    if (auto* g = graphOf(ctx)) g->setTarget(data, len, vol);
 }
 
-// --- NOVOS MÉTODOS CLÍNICOS ---
-
-NATIVE_EXPORT
-void set_test_tone(EngineContext* ctx, float freq, float amp, int32_t left, int32_t right) {
-#ifdef __ANDROID__
-    if (ctx && ctx->engine) ctx->engine->setTestTone(freq, amp, left != 0, right != 0);
-#endif
+NATIVE_EXPORT void set_noise_sample(EngineContext* ctx, float* data, int32_t len, float vol, int32_t loop) {
+    if (auto* g = graphOf(ctx)) g->setMasker(data, len, vol, loop != 0);
 }
 
-NATIVE_EXPORT
-void set_target_sample(EngineContext* ctx, float* data, int32_t len, float vol, int32_t loop) {
-#ifdef __ANDROID__
-    if (ctx && ctx->engine) ctx->engine->setTargetSample(data, len, vol, loop != 0);
-#endif
+NATIVE_EXPORT void set_masker_gain(EngineContext* ctx, float linear) {
+    if (auto* g = graphOf(ctx)) g->setMaskerGain(linear);
 }
 
-NATIVE_EXPORT
-void set_noise_sample(EngineContext* ctx, float* data, int32_t len, float vol, int32_t loop) {
-#ifdef __ANDROID__
-    if (ctx && ctx->engine) ctx->engine->setNoiseSample(data, len, vol, loop != 0);
-#endif
+NATIVE_EXPORT void set_noise_intensity(EngineContext* ctx, float intensity) {
+    if (auto* g = graphOf(ctx)) g->setNoiseAmplitude(intensity);
 }
 
-NATIVE_EXPORT
-void set_noise_intensity(EngineContext* ctx, float intensity) {
-#ifdef __ANDROID__
-    if (ctx && ctx->engine) ctx->engine->setNoiseIntensity(intensity);
-#endif
+NATIVE_EXPORT void set_target_panning(EngineContext* ctx, float panning) {
+    if (auto* g = graphOf(ctx)) g->setPanning(panning);
 }
 
-NATIVE_EXPORT
-void set_target_panning(EngineContext* ctx, float panning) {
-#ifdef __ANDROID__
-    if (ctx && ctx->engine) ctx->engine->setTargetPanning(panning);
-#endif
+NATIVE_EXPORT void silence_all(EngineContext* ctx) {
+    if (auto* g = graphOf(ctx)) g->silenceAll();
 }
 
-NATIVE_EXPORT
-void silence_all(EngineContext* ctx) {
-#ifdef __ANDROID__
-    if (ctx && ctx->engine) ctx->engine->silenceAll();
-#endif
+// --- EQ ---
+
+// leftDb/rightDb: 8 ganhos-alvo (dB) nas bandas 250, 500, 1k, 2k, 3k, 4k, 6k, 8k Hz.
+NATIVE_EXPORT void set_eq_targets(EngineContext* ctx, float* leftDb, float* rightDb, int32_t count) {
+    if (count != EqDesign::kBands || leftDb == nullptr || rightDb == nullptr) return;
+    if (auto* g = graphOf(ctx)) g->setEqTargets(leftDb, rightDb);
 }
 
-// Relógio do mesmo domínio de markStimulusOnset (steady_clock), para medir tempo de reação.
-// O Dart (NativeDSPBridge.getCurrentTimestampNs) chamava este símbolo, que não existia: a
-// tela de calibração travava no primeiro toque.
-NATIVE_EXPORT
-int64_t get_current_timestamp_ns(EngineContext* ctx) {
+NATIVE_EXPORT void set_dsp_bypass(EngineContext* ctx, int32_t bypass) {
+    if (auto* g = graphOf(ctx)) g->setBypass(bypass != 0);
+}
+
+// --- Telemetria / QA ---
+
+NATIVE_EXPORT int32_t get_limiter_hits(EngineContext* ctx) {
+    auto* g = graphOf(ctx);
+    return g ? g->limiterHits() : 0;
+}
+
+NATIVE_EXPORT void reset_limiter_hits(EngineContext* ctx) {
+    if (auto* g = graphOf(ctx)) g->resetLimiterHits();
+}
+
+NATIVE_EXPORT int32_t get_target_frames_remaining(EngineContext* ctx) {
+    auto* g = graphOf(ctx);
+    return g ? g->targetFramesRemaining() : 0;
+}
+
+NATIVE_EXPORT int64_t get_stimulus_timestamp_ns(EngineContext* ctx) {
+    auto* g = graphOf(ctx);
+    return g ? g->lastOnsetNs() : 0;
+}
+
+// Mesmo relógio (steady_clock) do onset do estímulo.
+NATIVE_EXPORT int64_t get_current_timestamp_ns(EngineContext* ctx) {
     (void)ctx;
     return std::chrono::duration_cast<std::chrono::nanoseconds>(
                std::chrono::steady_clock::now().time_since_epoch())
         .count();
 }
 
-NATIVE_EXPORT
-int64_t get_stimulus_timestamp_ns(EngineContext* ctx) {
-#ifdef __ANDROID__
-    if (ctx && ctx->engine) return ctx->engine->getStimulusTimestampNs();
-#endif
-    return 0;
-}
-
-NATIVE_EXPORT
-bool is_device_disconnected(EngineContext* ctx) {
+NATIVE_EXPORT bool is_device_disconnected(EngineContext* ctx) {
 #ifdef __ANDROID__
     if (ctx && ctx->engine) return ctx->engine->isDeviceDisconnected();
 #endif
+    (void)ctx;
     return false;
 }
 
-NATIVE_EXPORT
-double get_latency_ms(EngineContext* ctx) {
+NATIVE_EXPORT double get_latency_ms(EngineContext* ctx) {
 #ifdef __ANDROID__
     if (ctx && ctx->engine) return ctx->engine->getLatencyMs();
 #endif
+    (void)ctx;
     return 0.0;
 }
 
-NATIVE_EXPORT
-int32_t get_xrun_count(EngineContext* ctx) {
+NATIVE_EXPORT int32_t get_xrun_count(EngineContext* ctx) {
 #ifdef __ANDROID__
     if (ctx && ctx->engine) return ctx->engine->getXRunCount();
 #endif
+    (void)ctx;
     return 0;
 }
 
-NATIVE_EXPORT
-float get_dsp_load(EngineContext* ctx) {
+NATIVE_EXPORT float get_dsp_load(EngineContext* ctx) {
 #ifdef __ANDROID__
     if (ctx && ctx->engine) return ctx->engine->getDspLoad();
 #endif
+    (void)ctx;
     return 0.0f;
 }
 
-NATIVE_EXPORT
-bool consume_soft_knee_flag(EngineContext* ctx) {
-#ifdef __ANDROID__
-    if (ctx && ctx->engine) return ctx->engine->getDspEngine().consumeSoftKneeFlag();
-#endif
-    return false;
-}
-
-// Configura EQ adaptativo com perfil audiométrico do paciente
-NATIVE_EXPORT
-void set_audiogram_profile(EngineContext* ctx, float* freqs, float* gains, int32_t count) {
-#ifdef __ANDROID__
-    if (ctx && ctx->engine) ctx->engine->setAudiogramProfile(freqs, gains, count);
-#endif
-}
-
-NATIVE_EXPORT
-const char* get_clock_info() {
-    return "std::chrono::high_resolution_clock (nanoseconds)";
+NATIVE_EXPORT const char* get_clock_info() {
+    return "std::chrono::steady_clock (nanoseconds)";
 }
 
 } // extern "C"

@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import '../../services/event_buffer.dart';
 import '../../services/audio_service_manager.dart';
+import 'qa_audio_panel.dart';
 
 class TechnicalDashboard extends StatefulWidget {
   const TechnicalDashboard({super.key});
@@ -17,7 +18,7 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
   late Timer _ticker;
   double _dspLoad = 0.0;
   int _xRuns = 0;
-  double _softKneeOpacity = 0.0;
+  int _limiterHits = 0;
   List<String> _pendingFiles = [];
   String _socModel = "Detecting...";
 
@@ -30,16 +31,10 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
       final engine = AudioServiceManager().engine;
       final native = engine.native; // Acesso direto à ponte FFI
       
-      final hit = native.consumeSoftKneeFlag();
-      
       setState(() {
         _dspLoad = native.getDspLoad();
         _xRuns = native.getXRunCount();
-        if (hit) {
-          _softKneeOpacity = 1.0;
-        } else {
-          _softKneeOpacity = (_softKneeOpacity - 0.1).clamp(0.0, 1.0);
-        }
+        _limiterHits = native.getLimiterHits();
       });
     });
   }
@@ -80,7 +75,8 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
         color: Color(0xFF121212),
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -114,29 +110,13 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
               _buildMetricCard("DSP LOAD", "${(_dspLoad * 100).toStringAsFixed(1)}%", _dspLoad > 0.8 ? Colors.redAccent : Colors.greenAccent),
               const SizedBox(width: 8),
               _buildMetricCard("XRUNS", _xRuns.toString(), _xRuns > 0 ? Colors.orangeAccent : Colors.greenAccent),
+              const SizedBox(width: 8),
+              // Acionamentos do limitador de segurança (-1 dBFS): numa sessão normal deve ficar 0.
+              _buildMetricCard("LIMITADOR", _limiterHits.toString(), _limiterHits > 0 ? Colors.orangeAccent : Colors.greenAccent),
             ],
           ),
           const SizedBox(height: 16),
-          
-          // Row 2: Soft-Knee Visualizer (Diagnostics)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12)),
-            child: Row(
-              children: [
-                AnimatedOpacity(
-                  duration: const Duration(milliseconds: 50),
-                  opacity: _softKneeOpacity,
-                  child: Container(
-                    width: 12, height: 12,
-                    decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.amber, blurRadius: 10)]),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Text("SOFT-KNEE LIMITER ACTIVE", style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
-              ],
-            ),
-          ),
+          const QaAudioPanel(),
           const SizedBox(height: 16),
           
           // Row 3: Persistence Sync
@@ -171,6 +151,7 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

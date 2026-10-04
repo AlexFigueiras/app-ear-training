@@ -141,15 +141,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Compile and run cpp/tests
+      - name: Compile and run cpp/tests (ASan + UBSan)
         run: |
           set -e
           for test in cpp/tests/*_test.cpp; do
             echo "== $test"
-            g++ -std=c++17 -O1 -g -Wall -Wextra \
+            g++ -std=c++17 -O1 -g -Wall -Wextra -pthread \
               -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer \
-              -Icpp -Icpp/tests -o /tmp/native_test "$test"
+              -Icpp -Icpp/tests -o /tmp/native_test "$test" cpp/audio_graph.cpp
             /tmp/native_test
+          done
+
+      # ThreadSanitizer: acusa corrida de dados entre a thread do Dart e a de áudio.
+      # vm.mmap_rnd_bits=28: kernels novos do runner usam 32 bits de ASLR, que o TSan não suporta.
+      - name: Compile and run cpp/tests (ThreadSanitizer)
+        run: |
+          set -e
+          sudo sysctl vm.mmap_rnd_bits=28
+          for test in cpp/tests/*_test.cpp; do
+            echo "== $test (tsan)"
+            g++ -std=c++17 -O1 -g -pthread -fsanitize=thread \
+              -Icpp -Icpp/tests -o /tmp/native_test_tsan "$test" cpp/audio_graph.cpp
+            TSAN_OPTIONS=halt_on_error=1 /tmp/native_test_tsan
           done
 
   # Build de RELEASE descartável: prova que R8/minify, CMake/NDK e assinatura de fallback

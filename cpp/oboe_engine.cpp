@@ -1,4 +1,5 @@
 #include "oboe_engine.h"
+#include <chrono>
 #include <iostream>
 
 #if defined(__x86_64__) || defined(__i386__)
@@ -25,134 +26,71 @@ namespace {
     }
 }
 
-OboeEngine::OboeEngine() : dspEngine(48000.0f) {
-}
+OboeEngine::OboeEngine() = default;
 
 OboeEngine::~OboeEngine() {
     stop();
 }
 
 bool OboeEngine::start() {
-    if (outputStream) return true; // Já está rodando [IDEMPOTENTE]
+    if (outputStream_) return true; // idempotente
 
     oboe::AudioStreamBuilder builder;
-    
-    // 1. OBRIGAÇÃO DA ENGENHARIA: 48kHz (Acesso Direto ao Mixer nativo do Android OS)
     builder.setSampleRate(48000);
-    
-    // 2. OBRIGAÇÃO DE LATÊNCIA: < 20ms
     builder.setPerformanceMode(oboe::PerformanceMode::LowLatency);
     builder.setSharingMode(oboe::SharingMode::Exclusive);
-    
-    // Configurações Físicas
     builder.setFormat(oboe::AudioFormat::Float);
     builder.setChannelCount(oboe::ChannelCount::Stereo);
     builder.setDirection(oboe::Direction::Output);
-    
-    // 3. Thread Nativa para impedir bloqueio à UI
     builder.setCallback(this);
 
-    oboe::Result result = builder.openStream(outputStream);
-    
+    oboe::Result result = builder.openStream(outputStream_);
     if (result == oboe::Result::OK) {
-        // Double buffering rule
-        outputStream->setBufferSizeInFrames(outputStream->getFramesPerBurst() * 2);
-        
-        result = outputStream->requestStart();
+        outputStream_->setBufferSizeInFrames(outputStream_->getFramesPerBurst() * 2);
+        deviceDisconnected_.store(false, std::memory_order_release);
+        result = outputStream_->requestStart();
         if (result == oboe::Result::OK) return true;
     }
     return false;
 }
 
 void OboeEngine::stop() {
-    if (outputStream) {
-        outputStream->requestStop();
-        outputStream->close();
-        outputStream.reset();
-    }
-    if (inputStream) {
-        inputStream->requestStop();
-        inputStream->close();
-        inputStream.reset();
+    if (outputStream_) {
+        outputStream_->requestStop();
+        outputStream_->close();
+        outputStream_.reset();
     }
 }
 
-// O Hardware pede novos dados síncronos
-oboe::DataCallbackResult OboeEngine::onAudioReady(
-    oboe::AudioStream *oboeStream, void *audioData, int32_t numFrames) {
-    
-    // Modo Engenheiro: Início da cronometria do CPU Load
-    auto startTime = std::chrono::high_resolution_clock::now();
-    
-    // Configura FPU para Flush-to-Zero evitando picos de CPU com N°s Denormais (Silêncio Assintótico)
+oboe::DataCallbackResult OboeEngine::onAudioReady(oboe::AudioStream* stream, void* audioData,
+                                                  int32_t numFrames) {
+    const auto startTime = std::chrono::steady_clock::now();
     setDenormalsAreZero();
-    // Sem log no callback: I/O aqui bloqueia a thread de áudio e causa falhas (glitches).
 
-    float *floatData = static_cast<float *>(audioData);
-    
-    bool hasStimulusInBlock = false;
-
-    // MIXER NATIVO (Zero Latency Synthesis)
-    float panningValue = targetPanning.load();
-    float leftGain = (panningValue <= 0.0f) ? 1.0f : (1.0f - panningValue);
-    float rightGain = (panningValue >= 0.0f) ? 1.0f : (1.0f + panningValue);
-
-    for(int i = 0; i < numFrames; i++) {
-        float monoTarget = targetPlayer.getNextSample();
-        
-        // Detecção de Início do Estímulo na exata amostra do hardware [PASSO 2]
-        if (monoTarget != 0.0f && !wasStimulusActive) {
-            markStimulusOnset();
-            wasStimulusActive = true;
-        } else if (monoTarget == 0.0f) {
-            wasStimulusActive = false;
-        }
-
-        float monoNoise = noisePlayer.getNextSample();
-        float monoWhite = whiteNoiseGenerator.getNextSample();
-
-        for(int ch = 0; ch < 2; ch++) {
-            float mixedSample = 0.0f;
-            float gain = (ch == 0) ? leftGain : rightGain;
-            
-            // 1. Testa tom puro (Lateralizado via Oscillador)
-            mixedSample += testOscillator.getNextSample(ch);
-            
-            // 2. Canal de Estimulação Espacializada (Binaural Panning)
-            mixedSample += monoTarget * gain;
-            
-            // 3. Canais de Ruído (Centrados para Mascaramento)
-            mixedSample += monoNoise;
-            mixedSample += monoWhite;
-
-            floatData[i * 2 + ch] = mixedSample;
-        }
-        testOscillator.updatePhase();
+    float* out = static_cast<float*>(audioData);
+    if (stream->getChannelCount() == 2) {
+        graph_.render(out, numFrames);
+    } else {
+        // Saída mono (raro): o grafo é sempre estéreo; não há como mixar sem buffer extra,
+        // então entregamos silêncio em vez de áudio errado.
+        std::fill(out, out + numFrames * stream->getChannelCount(), 0.0f);
     }
 
-    // Processamento do Pipeline DSP (IIR/FIR Híbrido)
-    // Roteamento para a matemática Híbrida do Crossover e EQ paramétrico
-    dspEngine.processAudioBlock(floatData, numFrames, oboeStream->getChannelCount());
-    
-    // FIM DA MEDIÇÃO: Cálculo de Carga de CPU dedicada (DSP Load)
-    auto endTime = std::chrono::high_resolution_clock::now();
-    auto processTimeNs = std::chrono::duration_cast<std::chrono::nanoseconds>(endTime - startTime).count();
-    
-    // Tempo total disponível para este bloco: (frames / sampleRate) em nano
-    double availableTimeNs = (double)numFrames / 48000.0 * 1e9;
-    dspUsage.store((float)(processTimeNs / availableTimeNs), std::memory_order_relaxed);
-
+    const auto elapsedNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                               std::chrono::steady_clock::now() - startTime)
+                               .count();
+    const double availableNs = (double)numFrames / 48000.0 * 1e9;
+    dspUsage_.store((float)(elapsedNs / availableNs), std::memory_order_relaxed);
     return oboe::DataCallbackResult::Continue;
 }
 
-void OboeEngine::onErrorBeforeClose(oboe::AudioStream *oboeStream, oboe::Result error) {
-    // Log do evento de desconexão e sinaliza para UI [PASSO 4]
+void OboeEngine::onErrorBeforeClose(oboe::AudioStream*, oboe::Result error) {
     std::cerr << "Oboe onErrorBeforeClose: " << oboe::convertToText(error) << std::endl;
-    deviceDisconnected.store(true, std::memory_order_release);
+    deviceDisconnected_.store(true, std::memory_order_release);
 }
 
-void OboeEngine::onErrorAfterClose(oboe::AudioStream *oboeStream, oboe::Result error) {
-    std::cerr << "Oboe onErrorAfterClose. Auto-restarting engine." << std::endl;
-    // Tenta reativar o motor após a desconexão (ex: fim de chamada telefônica)
+void OboeEngine::onErrorAfterClose(oboe::AudioStream*, oboe::Result) {
+    // Ex.: fim de chamada telefônica ou troca de dispositivo. O stream antigo já foi fechado.
+    outputStream_.reset();
     start();
 }

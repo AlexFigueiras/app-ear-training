@@ -30,8 +30,8 @@ checklist de escuta no celular (APK de profile). Análise e porquês em `docs/DE
 |---|---|---|
 | 0 — Base verde (analyze limpo, job `native-tests`, APK de profile no CI) | ✅ | CI verde (run 37238438644); checklist ok do usuário |
 | 1 — Limpeza e promessas | ✅ | CI verde; checklist ok do usuário |
-| 2 — Áudio que sai errado (TTS 48 kHz, ruído que não desliga, Repetir) | 🟡 | Código pronto; aguardando CI e checklist. **Ação humana:** publicar a Edge Function `tts` atualizada (o app já funciona antes disso) |
-| 3 — Motor C++ consertado (EQ multibanda, bypass de medição, limitador) | ⬜ | |
+| 2 — Áudio que sai errado (TTS 48 kHz, ruído que não desliga, Repetir) | 🟡 | CI verde (run 37240201716). Checklist no celular adiado pelo usuário (fazer junto com a Etapa 3). **Ação humana:** publicar a Edge Function `tts` atualizada |
+| 3 — Motor C++ consertado (EQ multibanda, bypass de medição, limitador) | 🟡 | Código pronto; aguardando CI (testes nativos com ASan/UBSan e TSan) e checklist |
 | 4 — Teste auditivo confiável | ⬜ | |
 | 5 — Banco de estímulos que obriga a ouvir | ⬜ | |
 | 6 — Feedback e fim de sessão | ⬜ | |
@@ -58,8 +58,8 @@ checklist de escuta no celular (APK de profile). Análise e porquês em `docs/DE
 | Fala no ruído (Speech-in-Noise) | 🟡 | `lib/screens/speech_in_noise_screen.dart` | Existe |
 | Gamificação (XP / Energia Neural / Streak) | 🟡 | `lib/core/gamification_controller.dart` | Existe |
 | Relatório clínico / missão | 🚫 | — | Removido na Etapa 1 (código órfão; o PDF "clínico" tinha números inventados). Resumo de sessão honesto vem na Etapa 6 |
-| Painel técnico (oculto, long-press no topo da Home) | 🟡 | `lib/screens/widgets/technical_dashboard.dart` | `performance_dashboard`/`rehab_trends_chart` (órfãos) removidos na Etapa 1. Vira painel de "QA de áudio" na Etapa 3 |
-| Engine de áudio nativo (DSP/FFI) | 🟡 | `lib/audio_engine/audio_engine.dart`, `lib/audio_engine/native_engine.dart`, `cpp/` | Crítico (latência clínica); sem teste automatizado conhecido |
+| Painel técnico + QA de áudio (oculto, long-press no topo da Home) | 🟡 | `lib/screens/widgets/technical_dashboard.dart`, `qa_audio_panel.dart` | Carga do DSP, xruns, acionamentos do limitador; em debug/profile: tons por orelha e palavra com/sem EQ (Etapa 3) |
+| Motor de áudio nativo (C++/Oboe via FFI) | 🟡 | `cpp/audio_graph.*`, `cpp/eq_bank.h`, `cpp/buffer_source.h`, `cpp/handoff.h`, `cpp/safety_limiter.h`, `cpp/oboe_engine.*`, `cpp/native_bridge.cpp`, `lib/audio_engine/` | Reescrito na Etapa 3: EQ de 8 bandas por orelha (biquads), ruído mixado depois do EQ, bypass para tons de medição, limitador -1 dBFS, troca de buffer sem lock. Testado no host (`cpp/tests/`, ASan/UBSan + TSan); no celular, só pelo checklist |
 | Telemetria / persistência Supabase | 🟡 | `lib/services/supabase_service.dart`, `lib/services/event_buffer.dart`, `lib/models/rehab_session.dart` | Arquivo offline pendente agora tem dono (não sobe na conta de outro usuário) e é apagado no logout/exclusão |
 | TTS (text-to-speech) | 🟡 | `lib/services/tts_service.dart`, `lib/audio_engine/wav_decoder.dart`, `supabase/functions/tts/` | Via Edge Function autenticada. Pede 48 kHz (Etapa 2); o app lê a taxa real do WAV e reamostra, então funciona antes e depois do deploy. Cache persistente (pasta de suporte), chave `v2`. **Sem a função publicada não há áudio nos treinos** |
 | Gatekeeper / paywall | 🟡 | `lib/services/gatekeeper_service.dart`, `lib/ui/screens/home_screen.dart` | Só lê o plano; plano escrito apenas pelo servidor (migration 003). Checkout falso e `flutter_stripe` removidos; PRO "em breve" até integrar Google Play Billing (decisão pendente, ver `docs/PLAY_STORE.md` §5) |
