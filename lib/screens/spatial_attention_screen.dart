@@ -7,6 +7,7 @@ import '../core/gamification_controller.dart';
 import '../models/audiogram.dart';
 import '../models/rehab_session.dart';
 import '../services/audio_service_manager.dart';
+import 'hearing_test/hearing_test_flow.dart';
 import '../services/supabase_service.dart';
 
 enum SpatialDirection { left, center, right }
@@ -20,6 +21,7 @@ class SpatialAttentionScreen extends StatefulWidget {
 }
 
 class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
+  late Audiogram _audiogram;
   final AudioRehabEngine _engine = AudioRehabEngine();
   final SupabaseService _supabase = SupabaseService();
   final GamificationController _gamification = GamificationController();
@@ -35,15 +37,23 @@ class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
   bool _isPlaying = false;
 
   List<Map<String, dynamic>> get _audiogramData => [
-    ...widget.audiogram.leftEar.map((p) => {'frequency': p.frequency, 'threshold': p.threshold}),
-    ...widget.audiogram.rightEar.map((p) => {'frequency': p.frequency, 'threshold': p.threshold}),
+    ..._audiogram.leftEar.map((p) => {'frequency': p.frequency, 'threshold': p.threshold}),
+    ..._audiogram.rightEar.map((p) => {'frequency': p.frequency, 'threshold': p.threshold}),
   ];
 
   @override
   void initState() {
     super.initState();
-    _engine.initializeEngine(widget.audiogram);
+    _audiogram = widget.audiogram;
     _gamification.resetEnergyForNewSession();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
+  }
+
+  /// Audiograma do teste antigo? Oferece refazer antes de treinar (o EQ usa o audiograma).
+  Future<void> _bootstrap() async {
+    _audiogram = await HearingTestFlow.ensureCurrent(context, _audiogram);
+    if (!mounted) return;
+    await _engine.initializeEngine(_audiogram);
     _startTrial();
   }
 
@@ -116,7 +126,7 @@ class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
   void _finishSession() async {
     final duration = DateTime.now().difference(_sessionStart).inMilliseconds;
     final session = RehabSession(
-      patientId: widget.audiogram.patientId,
+      patientId: _audiogram.patientId,
       date: DateTime.now(),
       level: RehabLevel.spatialAttention,
       totalTrials: _maxTrials,

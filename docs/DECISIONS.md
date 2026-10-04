@@ -1,6 +1,77 @@
 # DECISIONS — histórico vivo de decisões
 > Entradas no topo (mais recente primeiro). Estado do que existe fica em `docs/STATUS.md`.
 
+## [2026-10-04] Plano "treino eficaz" — Etapa 4 (teste auditivo confiável)
+- **Status:** accepted (aguardando CI + checklist no celular)
+- **Contexto:** o teste é a âncora do EQ e da seleção de palavras, mas:
+  - media através do compressor (corrigido na Etapa 3);
+  - não tinha rampa nem tentativas silenciosas;
+  - "sempre sim" travava no piso; sem resposta subia até 120 (C1);
+  - faltavam 3 e 6 kHz;
+  - não cabia em 360×640 (C2);
+  - não explicava como responder, mostrava a intensidade ao paciente, trocava de ouvido sem
+    aviso e descartava ao voltar (C3);
+  - o audiograma saía na ordem do teste, com valores negativos e sem legenda (C4);
+  - não dava para refazer.
+- **Decisões:**
+  - **Procedimento** (`lib/training/threshold_procedure.dart`, Dart puro): Hughson-Westlake
+    modificado.
+    - Familiarização de 20 em 20; ouviu → -10; não ouviu → +5.
+    - Limiar = menor nível com 2 respostas ascendentes.
+    - Sem resposta 2× no máximo → "sem resposta".
+    - Ouvir no piso conta como ascendente.
+    - ~20% de silenciosas; 2 falsos alarmes reiniciam a frequência; 4 encerram como duvidoso.
+    - Teto de 30 apresentações.
+  - **Achado no teste local:** quem responde "ouvi" para tudo descia ao piso com poucas
+    apresentações e passava como confiável em ~88% das vezes. Agora todo limiar só é aceito
+    depois de 2 tentativas silenciosas de verificação.
+  - **Sessão** (`hearing_test_session.dart`): uma orelha de cada vez, na ordem
+    1k-2k-3k-4k-6k-8k-1k(reteste)-500-250. O reteste divergente (> 10 dB) marca a orelha como
+    duvidosa. O 1 kHz usa a melhor das duas medidas.
+  - **Som:** tom pulsado (3 bipes de 250 ms) sem processamento (bypass) e intervalo irregular
+    entre apresentações.
+  - **Saída de áudio:** `MainActivity.kt` expõe o canal `bosyn/audio_output` com o volume de
+    mídia e o tipo de saída, sem pacote novo.
+    - Alto-falante bloqueia o teste; Bluetooth gera aviso.
+    - Se o volume mudar no meio, o teste pede para voltar ou recomeçar.
+    - Ambiente silencioso: por confirmação da pessoa. Medir o ruído exigiria permissão de
+      microfone; não foi adicionada.
+  - **Tela:** instruções → som de treino → aviso de cada ouvido → "Ouvi"/"Não ouvi" → resultado.
+    - Sem intensidade visível.
+    - Sair no meio pede confirmação.
+    - Tudo rolável.
+  - **Resultado:** audiograma clínico (250 → 8 k, nível de cima para baixo, valores positivos,
+    legenda ×/○, "sem resposta" listado).
+    - Categoria OMS 2021 aproximada por PTA4, sempre com "estimativa, não é exame".
+    - Próximo passo: refazer (respostas inconsistentes), procurar profissional (assimetria
+      ≥ 15 dB, PTA4 ≥ 35 ou sem resposta) ou começar a treinar.
+  - **Versionamento:** `AudiometryPoint` ganhou `no_response`, `reliable` e `protocol` (2). Os
+    pontos antigos leem como protocolo 1.
+    - Ao abrir um treino com audiograma antigo, o app oferece refazer
+      (`HearingTestFlow.ensureCurrent`).
+    - O "Refazer teste de audição" da Home já existe (sessão da auditoria) e abre a tela nova,
+      porque o contrato de retorno `{left, right}` foi mantido. Esta etapa não editou a Home.
+- **Critério do plano revisado:** "±5 dB em 95%" não é atingível com passos de 5 dB, nem na
+  audiometria clínica. Em simulação (20 mil execuções, limiar uniforme em -5..65), o método dá
+  ~80% a ±5 dB, ~100% a ±10 dB, erro médio ~3 dB e viés de +2,7 dB (estima perto do ponto de
+  70% de detecção). O teste trava esses números.
+- **Verificação:** os testes Dart puros (`threshold_procedure_test`, `hearing_test_session_test`,
+  `tone_factory_test`, `audibility_profile_test`) rodaram localmente com `dart` e um substituto
+  mínimo de `flutter_test` (o `flutter test` não roda nesta máquina): 20/20 ok. `flutter analyze`
+  limpo.
+- **Arquivos:**
+  - `lib/training/threshold_procedure.dart`, `hearing_test_session.dart`,
+    `hearing_summary.dart`;
+  - `lib/screens/threshold_test_screen.dart` e `lib/screens/hearing_test/*`;
+  - `lib/services/audio_output_service.dart`, `MainActivity.kt`;
+  - `lib/models/audiogram.dart`, `lib/audio_engine/{audio_engine,tone_factory}.dart`;
+  - as 3 telas de treino (checagem de audiograma antigo);
+  - `lib/screens/widgets/phonemic_widgets.dart` (extraído para a tela ficar abaixo de 300
+    linhas);
+  - testes.
+- **Pendente para depois:** E4 (calibração "−200 ms") e E5 (modo engenheiro por toque longo)
+  ficam para a varredura da Etapa 11.
+
 ## [2026-10-04] Plano "treino eficaz" — Etapa 3 (motor C++ consertado, mantido em C++)
 - **Status:** accepted (aguardando CI + checklist no celular)
 - **Contexto:** a cadeia nativa estava quebrada e distorcia até a medição.

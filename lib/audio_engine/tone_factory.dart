@@ -30,6 +30,26 @@ class ToneFactory {
     return out;
   }
 
+  /// Tom pulsado do teste de limiar: [pulses] bipes de [onSeconds] separados por [offSeconds],
+  /// cada um com rampa. Bipes são mais fáceis de notar perto do limiar e de separar de um
+  /// zumbido (tinnitus) do que um tom contínuo.
+  static Float32List pulsed({
+    required double frequencyHz,
+    required double amplitude,
+    int pulses = 3,
+    double onSeconds = 0.25,
+    double offSeconds = 0.2,
+    double sampleRate = 48000.0,
+  }) {
+    final on = sine(frequencyHz: frequencyHz, seconds: onSeconds, amplitude: amplitude, sampleRate: sampleRate);
+    final gap = (offSeconds * sampleRate).round();
+    final out = Float32List(pulses * on.length + (pulses - 1) * gap);
+    for (var p = 0; p < pulses; p++) {
+      out.setAll(p * (on.length + gap), on);
+    }
+    return out;
+  }
+
   /// Aplica rampa cosseno elevado nas duas pontas (no máximo metade do sinal cada).
   static void applyRamps(Float32List samples, {double sampleRate = 48000.0}) {
     final ramp = math.min((rampSeconds * sampleRate).round(), samples.length ~/ 2);

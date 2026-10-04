@@ -139,24 +139,34 @@ class AudioRehabEngine {
 
   /// Tom puro do teste de limiar: SEM EQ (bypass) — medir através de processamento invalida o
   /// audiograma. Nível com teto em [_kRefDb] (escala cheia).
+  /// [pulsed]: 3 bipes de 250 ms (teste de limiar); senão, tom contínuo de [durationMs].
   Future<Duration> playPureTone({
     required int frequencyHz,
     required int durationMs,
     required EarSide ear,
     required double dbLevel,
+    bool pulsed = false,
   }) async {
     _verifySecurityScope();
     final level = math.min(dbLevel, _kRefDb);
+    final amplitude = math.pow(10, (level - _kRefDb) / 20).toDouble();
+    final samples = pulsed
+        ? ToneFactory.pulsed(frequencyHz: frequencyHz.toDouble(), amplitude: amplitude, sampleRate: _fs)
+        : ToneFactory.sine(
+            frequencyHz: frequencyHz.toDouble(),
+            seconds: durationMs / 1000.0,
+            amplitude: amplitude,
+            sampleRate: _fs,
+          );
     _prepareTone(panning: ear == EarSide.left ? -1.0 : (ear == EarSide.right ? 1.0 : 0.0));
-    _loadSampleToNative(ToneFactory.sine(
-      frequencyHz: frequencyHz.toDouble(),
-      seconds: durationMs / 1000.0,
-      amplitude: math.pow(10, (level - _kRefDb) / 20).toDouble(),
-      sampleRate: _fs,
-    ));
+    _loadSampleToNative(samples);
     debugPrint("PURE TONE: $frequencyHz Hz | $level dB | $ear");
-    return Duration(milliseconds: durationMs);
+    return _durationOf(samples);
   }
+
+  /// Duração de uma apresentação pulsada (para as tentativas silenciosas esperarem o mesmo tempo).
+  static Duration get pulsedToneDuration => Duration(
+      microseconds: ToneFactory.pulsed(frequencyHz: 1000, amplitude: 0).length * 1000000 ~/ 48000);
 
   void _prepareTone({required double panning}) {
     _nativeBridge.setDspBypass(true);

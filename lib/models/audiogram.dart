@@ -5,18 +5,35 @@ enum EarSide { left, right, both }
 /// Representação da Via de Condução (Aérea ou Óssea)
 enum ConductionType { air, bone }
 
-/// Ponto individual no audiograma (Frequência em Hz, Intensidade em dB HL)
+/// Ponto do audiograma: frequência (Hz) e limiar em dB **relativos** (o fone não é calibrado,
+/// então não é dB HL clínico; ver `lib/training/threshold_procedure.dart`).
 class AudiometryPoint {
+  /// Versão do protocolo do teste do app.
+  /// 1 (ou ausente) = teste antigo, medido através do compressor: subestima a perda em agudos.
+  /// 2 = Etapa 4: sem processamento, rampas, tentativas silenciosas, 3 e 6 kHz.
+  static const int currentProtocol = 2;
+
   final int frequency;
   final double threshold;
   final ConductionType conduction;
   final bool masked;
+
+  /// Não ouviu nem no volume máximo do aparelho ([threshold] = nível máximo testado).
+  final bool noResponse;
+
+  /// false = respostas inconsistentes (falsos alarmes, reteste de 1 kHz divergente).
+  final bool reliable;
+
+  final int protocol;
 
   AudiometryPoint({
     required this.frequency,
     required this.threshold,
     this.conduction = ConductionType.air,
     this.masked = false,
+    this.noResponse = false,
+    this.reliable = true,
+    this.protocol = 1,
   });
 
   Map<String, dynamic> toJson() => {
@@ -24,13 +41,19 @@ class AudiometryPoint {
     'threshold': threshold,
     'conduction': conduction.name,
     'masked': masked,
+    'no_response': noResponse,
+    'reliable': reliable,
+    'protocol': protocol,
   };
 
   factory AudiometryPoint.fromJson(Map<String, dynamic> json) => AudiometryPoint(
     frequency: json['frequency'],
     threshold: (json['threshold'] as num).toDouble(),
-    conduction: ConductionType.values.byName(json['conduction']),
+    conduction: ConductionType.values.byName(json['conduction'] ?? 'air'),
     masked: json['masked'] ?? false,
+    noResponse: json['no_response'] ?? false,
+    reliable: json['reliable'] ?? true,
+    protocol: (json['protocol'] as num?)?.toInt() ?? 1,
   );
 
   /// Validação técnica clínica
@@ -54,6 +77,11 @@ class Audiogram {
     required this.rightEar,
     this.notes,
   });
+
+  /// Medido com o protocolo antigo (através do compressor, sem 3/6 kHz): pedir novo teste.
+  bool get isOutdated =>
+      [...leftEar, ...rightEar].any((p) => p.protocol < AudiometryPoint.currentProtocol) ||
+      (leftEar.isEmpty && rightEar.isEmpty);
 
   /// Retorna a média tritonal (500Hz, 1000Hz, 2000Hz) - padrão clínico
   double calculatePTA([EarSide? side]) {

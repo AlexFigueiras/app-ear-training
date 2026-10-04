@@ -31,8 +31,8 @@ checklist de escuta no celular (APK de profile). Análise e porquês em `docs/DE
 | 0 — Base verde (analyze limpo, job `native-tests`, APK de profile no CI) | ✅ | CI verde (run 37238438644); checklist ok do usuário |
 | 1 — Limpeza e promessas | ✅ | CI verde; checklist ok do usuário |
 | 2 — Áudio que sai errado (TTS 48 kHz, ruído que não desliga, Repetir) | 🟡 | CI verde (run 37240201716). Checklist no celular adiado pelo usuário (fazer junto com a Etapa 3). **Ação humana:** publicar a Edge Function `tts` atualizada |
-| 3 — Motor C++ consertado (EQ multibanda, bypass de medição, limitador) | 🟡 | Código pronto; aguardando CI (testes nativos com ASan/UBSan e TSan) e checklist |
-| 4 — Teste auditivo confiável | ⬜ | |
+| 3 — Motor C++ consertado (EQ multibanda, bypass de medição, limitador) | 🟡 | CI verde (run 37241421987, inclui TSan). Checklist no celular adiado pelo usuário |
+| 4 — Teste auditivo confiável | 🟡 | Código pronto (achados C1–C4 da auditoria de UX); aguardando CI e checklist. Botão "Refazer teste" na Home já existe (feito pela sessão da auditoria) e abre o teste novo |
 | 5 — Banco de estímulos que obriga a ouvir | ⬜ | |
 | 6 — Feedback e fim de sessão | ⬜ | |
 | 7 — Dificuldade real + Coquetel com ruído de fala | ⬜ | |
@@ -52,7 +52,7 @@ checklist de escuta no celular (APK de profile). Análise e porquês em `docs/DE
 | Onboarding | 🟡 | `lib/ui/screens/onboarding_screen.dart` | Abre com o aviso de saúde; sem promessa de "remapear" a audição; "Pular teste" pula de fato (Etapa 1) |
 | Calibração de latência | 🟡 | `lib/ui/screens/calibration_screen.dart` | Travava no primeiro toque (símbolo nativo `get_current_timestamp_ns` inexistente) — corrigido na Etapa 2. Bip a -20 dBFS com rampa |
 | Home / dashboard de treino | 🟡 | `lib/ui/screens/home_screen.dart` | Existe **duplicidade estrutural**: há uma segunda árvore de telas em `lib/screens/` paralela a `lib/ui/screens/` — não resolvida neste bootstrap (decisão que toca `lib/`, fora de escopo, ver `docs/ARCHITECTURE.md`) |
-| Teste de limiar tonal (Threshold Test) | 🟡 | `lib/screens/threshold_test_screen.dart` | Existe |
+| Teste auditivo (limiar tonal) | 🟡 | `lib/screens/threshold_test_screen.dart`, `lib/screens/hearing_test/`, `lib/training/threshold_procedure.dart`, `hearing_test_session.dart`, `hearing_summary.dart`, `lib/services/audio_output_service.dart` | Etapa 4: Hughson-Westlake modificado com tentativas silenciosas (2 de verificação antes de aceitar), "sem resposta" no máximo, 250 Hz–8 kHz com 3/6 k e reteste de 1 k, tom pulsado sem processamento, fone e volume fixo checados, resultado rolável com audiograma clínico, categoria OMS aproximada e próximo passo. **Triagem relativa, não dB HL clínico.** Precisão em simulação: ~80% a ±5 dB, ~100% a ±10 dB |
 | Discriminação fonêmica | 🟡 | `lib/screens/phonemic_discrimination_screen.dart`, `lib/core/phoneme_map.dart` | Existe |
 | Atenção espacial | 🟡 | `lib/screens/spatial_attention_screen.dart` | Existe; monaural e sem adaptação — redesenho na Etapa 9 |
 | Fala no ruído (Speech-in-Noise) | 🟡 | `lib/screens/speech_in_noise_screen.dart` | Existe |

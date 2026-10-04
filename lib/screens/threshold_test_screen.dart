@@ -1,8 +1,23 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart';
+
 import '../audio_engine/audio_engine.dart';
 import '../models/audiogram.dart';
+import '../services/audio_output_service.dart';
+import '../training/hearing_test_session.dart';
+import 'hearing_test/hearing_test_intro_view.dart';
+import 'hearing_test/hearing_test_result_view.dart';
+import 'hearing_test/test_panels.dart';
 
+enum _Phase { intro, practice, earIntro, testing, result }
+
+/// Teste auditivo (Etapa 4 do plano; achados C1–C4 da auditoria de UX).
+///
+/// Fluxo: instruções → tom de treino → aviso do ouvido → bipes com "Ouvi"/"Não ouvi" → resultado.
+/// A lógica clínica fica em [HearingTestSession]/[ThresholdProcedure] (Dart puro, testada); esta
+/// tela só apresenta. Devolve `{'left': List<AudiometryPoint>, 'right': List<AudiometryPoint>}`
+/// ao salvar (mesmo contrato usado pela Home e pelo onboarding).
 class ThresholdTestScreen extends StatefulWidget {
   const ThresholdTestScreen({super.key});
 
@@ -12,378 +27,232 @@ class ThresholdTestScreen extends StatefulWidget {
 
 class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
   final AudioRehabEngine _engine = AudioRehabEngine();
-  final List<int> _frequencies = [1000, 2000, 4000, 8000, 500, 250];
+  final AudioOutputService _output = const AudioOutputService();
+  final math.Random _random = math.Random();
 
-  EarSide _currentEar = EarSide.left;
-  int _currentFreqIndex = 0;
-  double _currentDb = 40.0;
-  bool _isTesting = false;
-  bool _testFinished = false;
-
-  // Hughson-Westlake: lista de reversões por frequência atual
-  final List<double> _reversals = [];
-  bool? _lastResponse; // null = primeira resposta
-  static const int _requiredReversals = 3;
-
-  // Resultados por orelha
-  final List<AudiometryPoint> _leftEarPoints = [];
-  final List<AudiometryPoint> _rightEarPoints = [];
+  _Phase _phase = _Phase.intro;
+  HearingTestSession _session = HearingTestSession();
+  OutputRoute _route = OutputRoute.unknown;
+  bool _quietConfirmed = false;
+  MediaVolume? _volume;
+  bool _playing = false;
+  bool _awaitingAnswer = false;
+  String? _notice;
+  Audiogram? _audiogram;
 
   @override
   void initState() {
     super.initState();
-    _engine.initializeEngine(Audiogram(
-      id: "TEMP_TEST",
-      patientId: "TEMP_TEST",
-      date: DateTime.now(),
-      leftEar: [],
-      rightEar: [],
-    ));
+    _engine.initializeEngine(Audiogram(id: '', patientId: '', date: DateTime.now(), leftEar: [], rightEar: []));
+    _checkRoute();
   }
 
   @override
   void dispose() {
-    _engine.silenceAll(); // não deixa um tom tocando ao sair no meio do teste
+    _engine.silenceAll(); // não deixa um bipe tocando ao sair no meio do teste
     super.dispose();
   }
 
-  void _startFrequencyTest() {
+  Future<void> _checkRoute() async {
+    final route = await _output.outputRoute();
+    if (mounted) setState(() => _route = route);
+  }
+
+  Future<void> _startPractice() async {
+    _volume = await _output.mediaVolume();
     setState(() {
-      _isTesting = true;
-      _testFinished = false;
-      _currentDb = 40.0;
-      _reversals.clear();
-      _lastResponse = null;
+      _phase = _Phase.practice;
+      _notice = null;
     });
-    _playCurrentTestTone();
+    await _play(() => _engine.playPureTone(
+        frequencyHz: 1000, durationMs: 0, ear: EarSide.both, dbLevel: 50, pulsed: true));
   }
 
-  void _playCurrentTestTone() {
-    _engine.playPureTone(
-      frequencyHz: _frequencies[_currentFreqIndex],
-      durationMs: 1500,
-      ear: _currentEar,
-      dbLevel: _currentDb,
-    );
-  }
-
-  // Protocolo Hughson-Westlake:
-  //   Descida: 10 dB após "ouviu"
-  //   Subida: 5 dB após "não ouviu"
-  //   Limiar = média das últimas 3 reversões
-  void _onResponse(bool detected) {
-    if (!_isTesting) return;
-
-    final bool? lastResp = _lastResponse;
-
-    // Detecta reversão: mudança de direção na escada
-    if (lastResp != null && detected != lastResp) {
-      _reversals.add(_currentDb);
-      if (_reversals.length >= _requiredReversals) {
-        _recordThresholdAndNext();
-        return;
-      }
-    }
-
-    _lastResponse = detected;
-
-    if (detected) {
-      // Descida em 10 dB
-      final next = _currentDb - 10.0;
-      setState(() => _currentDb = next < -10.0 ? -10.0 : next);
-    } else {
-      // Subida em 5 dB
-      final next = _currentDb + 5.0;
-      setState(() => _currentDb = next > 120.0 ? 120.0 : next);
-    }
-
-    Future.delayed(const Duration(milliseconds: 300), _playCurrentTestTone);
-  }
-
-  void _recordThresholdAndNext() {
-    // Média das _requiredReversals últimas reversões
-    final recent = _reversals.length >= _requiredReversals
-        ? _reversals.sublist(_reversals.length - _requiredReversals)
-        : _reversals;
-    final threshold = recent.reduce((a, b) => a + b) / recent.length;
-
-    final point = AudiometryPoint(
-      frequency: _frequencies[_currentFreqIndex],
-      threshold: threshold.roundToDouble(),
-    );
-
-    if (_currentEar == EarSide.left) {
-      _leftEarPoints.add(point);
-    } else {
-      _rightEarPoints.add(point);
-    }
-
-    _reversals.clear();
-    _lastResponse = null;
-
-    if (_currentFreqIndex < _frequencies.length - 1) {
+  void _practiceAnswer(bool heard) {
+    if (heard) {
       setState(() {
-        _currentFreqIndex++;
-        _currentDb = 40.0;
-      });
-      Future.delayed(const Duration(milliseconds: 800), _playCurrentTestTone);
-    } else if (_currentEar == EarSide.left) {
-      setState(() {
-        _currentEar = EarSide.right;
-        _currentFreqIndex = 0;
-        _currentDb = 40.0;
-      });
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) _playCurrentTestTone();
+        _phase = _Phase.earIntro;
+        _notice = null;
       });
     } else {
-      _finishTest();
+      setState(() => _notice = 'Confira se o fone está bem colocado e aumente um pouco o volume. '
+          'Depois toque em "Tocar de novo".');
     }
   }
 
-  void _finishTest() {
+  Future<void> _play(Future<Duration> Function() action) async {
     setState(() {
-      _isTesting = false;
-      _testFinished = true;
+      _playing = true;
+      _awaitingAnswer = false;
+    });
+    final duration = await action();
+    await Future.delayed(duration);
+    if (!mounted) return;
+    setState(() {
+      _playing = false;
+      _awaitingAnswer = true;
     });
   }
 
-  static Widget _topTitleWidget(double value, TitleMeta meta) {
-    // Frequências na ordem de teste: 1k, 2k, 4k, 8k, 500, 250
-    const labels = ['1K', '2K', '4K', '8K', '500', '250'];
-    final idx = value.toInt();
-    if (idx >= 0 && idx < labels.length) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 8.0),
-        child: Text(labels[idx], style: const TextStyle(color: Colors.white54, fontSize: 10)),
-      );
+  /// Volume mudou desde o início? O nível relativo só vale com o volume fixo.
+  Future<bool> _volumeUnchanged() async {
+    final now = await _output.mediaVolume();
+    if (_volume == null || now == null || now == _volume) return true;
+    if (!mounted) return false;
+    final keep = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('O volume mudou'),
+        content: Text('O volume do celular estava em ${_volume!.current} e agora está em ${now.current}. '
+            'Para o resultado valer, volte para ${_volume!.current} e toque em "Continuar".'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Recomeçar o teste')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Continuar')),
+        ],
+      ),
+    );
+    if (keep == true) return _volumeUnchanged();
+    _restart();
+    return false;
+  }
+
+  Future<void> _present() async {
+    if (!await _volumeUnchanged() || !mounted) return;
+    final step = _session.currentStep;
+    final p = _session.next();
+    if (p.isCatch) {
+      await _play(() async => AudioRehabEngine.pulsedToneDuration);
+    } else {
+      await _play(() => _engine.playPureTone(
+          frequencyHz: step.frequency, durationMs: 0, ear: step.ear, dbLevel: p.level, pulsed: true));
     }
-    return const SizedBox.shrink();
+  }
+
+  Future<void> _answer(bool heard) async {
+    if (!_awaitingAnswer) return;
+    setState(() => _awaitingAnswer = false);
+    final procedure = _session.procedure;
+    _session.respond(heard);
+    setState(() => _notice = procedure.restartedForFalseAlarms
+        ? 'Toque em "Ouvi" só quando tiver certeza de que ouviu o bipe. Vamos repetir esta parte.'
+        : null);
+    if (_session.isDone) {
+      setState(() {
+        _audiogram = Audiogram(
+          id: '',
+          patientId: '',
+          date: DateTime.now(),
+          leftEar: _session.pointsFor(EarSide.left),
+          rightEar: _session.pointsFor(EarSide.right),
+        );
+        _phase = _Phase.result;
+      });
+      return;
+    }
+    if (_session.atEarStart) {
+      setState(() => _phase = _Phase.earIntro);
+      return;
+    }
+    // Intervalo irregular: sem ritmo previsível, a pessoa não "adivinha" o próximo bipe.
+    await Future.delayed(Duration(milliseconds: 700 + _random.nextInt(900)));
+    if (mounted && _phase == _Phase.testing) await _present();
+  }
+
+  void _restart() {
+    _engine.silenceAll();
+    setState(() {
+      _session = HearingTestSession();
+      _phase = _Phase.intro;
+      _notice = null;
+      _audiogram = null;
+      _playing = false;
+      _awaitingAnswer = false;
+    });
+  }
+
+  void _save() {
+    final a = _audiogram!;
+    Navigator.pop(context, {'left': a.leftEar, 'right': a.rightEar});
+  }
+
+  Future<void> _confirmExit() async {
+    final leave = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sair do teste?'),
+        content: const Text('O que você já respondeu será perdido.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Continuar o teste')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sair')),
+        ],
+      ),
+    );
+    if (leave == true && mounted) Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0D0D0F),
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          "AUDIOMETRIA — LIMIAR TONAL",
-          style: TextStyle(letterSpacing: 2, fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey),
+    final inProgress = _phase != _Phase.intro && _phase != _Phase.result;
+    return PopScope(
+      canPop: !inProgress,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _confirmExit();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0D0D0F),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          title: const Text('Teste de audição', style: TextStyle(fontSize: 18)),
         ),
-      ),
-      body: Container(
-        width: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment(0, -0.5),
-            radius: 1.5,
-            colors: [Color(0xFF1E1E24), Color(0xFF0D0D0F)],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Frequência atual
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(32),
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      "${_frequencies[_currentFreqIndex]} Hz",
-                      style: const TextStyle(fontSize: 64, fontWeight: FontWeight.w800, letterSpacing: -2, color: Colors.white),
-                    ),
-                    Text(
-                      _currentEar == EarSide.left ? "OUVIDO ESQUERDO" : "OUVIDO DIREITO",
-                      style: TextStyle(
-                        color: _currentEar == EarSide.left ? Colors.blueAccent : Colors.redAccent,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 32),
-
-              Text(
-                "Intensidade: ${_currentDb.toInt()} dB HL",
-                style: TextStyle(
-                  color: Colors.redAccent.shade100,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w300,
-                  shadows: [Shadow(color: Colors.redAccent.withValues(alpha: 0.5), blurRadius: 20)],
-                ),
-              ),
-
-              if (_isTesting) ...[
-                const SizedBox(height: 16),
-                Text(
-                  "Reversões: ${_reversals.length} / $_requiredReversals",
-                  style: const TextStyle(color: Colors.white24, fontSize: 10, fontFamily: 'monospace'),
-                ),
-              ],
-
-              const SizedBox(height: 60),
-
-              if (!_isTesting && !_testFinished) ...[
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 40),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withValues(alpha: 0.1),
-                    border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.warning_amber_rounded, color: Colors.orange),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          "Use fones de ouvido. O protocolo Hughson-Westlake vai subir e descer o volume até encontrar seu limiar exato em cada frequência.",
-                          style: TextStyle(color: Colors.orangeAccent, fontSize: 12),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: 250,
-                  height: 60,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    onPressed: _startFrequencyTest,
-                    child: const Text("INICIAR PROTOCOLO", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                  ),
-                ),
-              ] else if (_testFinished) ...[
-                const Text("AUDIOGRAMA REGISTRADO", style: TextStyle(fontSize: 16, color: Colors.blueAccent, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 20),
-                Container(
-                  height: 250,
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: LineChart(
-                    LineChartData(
-                      minY: -120,
-                      maxY: 10,
-                      lineBarsData: [
-                        LineChartBarData(
-                          spots: List.generate(_leftEarPoints.length, (i) => FlSpot(i.toDouble(), -_leftEarPoints[i].threshold)),
-                          isCurved: false,
-                          color: Colors.blueAccent,
-                          barWidth: 3,
-                          dotData: const FlDotData(show: true),
-                        ),
-                        LineChartBarData(
-                          spots: List.generate(_rightEarPoints.length, (i) => FlSpot(i.toDouble(), -_rightEarPoints[i].threshold)),
-                          isCurved: false,
-                          color: Colors.redAccent,
-                          barWidth: 3,
-                          dotData: const FlDotData(show: true),
-                        ),
-                      ],
-                      titlesData: FlTitlesData(
-                        topTitles: const AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 30,
-                            interval: 1,
-                            getTitlesWidget: _ThresholdTestScreenState._topTitleWidget,
-                          ),
-                        ),
-                        bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        leftTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 40,
-                            interval: 20,
-                            getTitlesWidget: (v, _) => Text("${(-v).toInt()}dB", style: const TextStyle(color: Colors.white54, fontSize: 10)),
-                          ),
-                        ),
-                      ),
-                      gridData: const FlGridData(show: true, drawVerticalLine: true, horizontalInterval: 20, verticalInterval: 1),
-                      borderData: FlBorderData(show: true, border: const Border(bottom: BorderSide(color: Colors.white10), left: BorderSide(color: Colors.white10))),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: 250,
-                  height: 60,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    onPressed: () => Navigator.pop(context, {
-                      'left': _leftEarPoints,
-                      'right': _rightEarPoints,
-                    }),
-                    child: const Text("SALVAR E CONTINUAR", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                  ),
-                ),
-              ] else ...[
-                const Text("Você percebeu o estímulo sonoro?", style: TextStyle(fontSize: 18, color: Colors.white70)),
-                const SizedBox(height: 48),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _ResponseButton(label: "NÃO", color: const Color(0xFF1E1E24), textColor: Colors.white60, onPressed: () => _onResponse(false)),
-                    const SizedBox(width: 40),
-                    _ResponseButton(label: "SIM", color: const Color(0xFF2563EB), textColor: Colors.white, onPressed: () => _onResponse(true)),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ),
+        body: SafeArea(child: _body()),
       ),
     );
   }
-}
 
-class _ResponseButton extends StatelessWidget {
-  final String label;
-  final Color color;
-  final Color textColor;
-  final VoidCallback onPressed;
-
-  const _ResponseButton({required this.label, required this.color, required this.textColor, required this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 130,
-      height: 130,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 25, spreadRadius: 1)],
-      ),
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          foregroundColor: textColor,
-          shape: const CircleBorder(),
-          elevation: 0,
-          side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-        ),
-        onPressed: onPressed,
-        child: Text(label, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
-      ),
-    );
+  Widget _body() {
+    switch (_phase) {
+      case _Phase.intro:
+        return HearingTestIntroView(
+          route: _route,
+          quietConfirmed: _quietConfirmed,
+          onQuietChanged: (v) => setState(() => _quietConfirmed = v),
+          onRecheckRoute: _checkRoute,
+          onStart: _startPractice,
+        );
+      case _Phase.practice:
+        return AnswerPanel(
+          heading: 'Som de treino',
+          instruction: 'Este é o som que você vai procurar. Você ouviu os bipes?',
+          playing: _playing,
+          canAnswer: _awaitingAnswer,
+          notice: _notice,
+          onAnswer: _practiceAnswer,
+          onReplay: _playing ? null : _startPractice,
+        );
+      case _Phase.earIntro:
+        final left = _session.currentStep.ear == EarSide.left;
+        return EarIntroPanel(
+          ear: left ? 'esquerdo' : 'direito',
+          onContinue: () {
+            setState(() => _phase = _Phase.testing);
+            _present();
+          },
+        );
+      case _Phase.testing:
+        final step = _session.currentStep;
+        return AnswerPanel(
+          heading: 'Ouvido ${step.ear == EarSide.left ? 'esquerdo' : 'direito'}',
+          instruction: _playing ? 'Escute com atenção…' : 'Você ouviu os bipes?',
+          progress: _session.progress,
+          playing: _playing,
+          canAnswer: _awaitingAnswer,
+          notice: _notice,
+          onAnswer: _answer,
+        );
+      case _Phase.result:
+        return HearingTestResultView(audiogram: _audiogram!, onSave: _save, onRetest: _restart);
+    }
   }
 }
+
