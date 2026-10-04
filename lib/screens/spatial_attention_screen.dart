@@ -27,7 +27,7 @@ class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
   // Dose mínima efetiva
   static const int _maxTrials = 20;
   int _correctAnswers = 0;
-  DateTime _sessionStart = DateTime.now();
+  final DateTime _sessionStart = DateTime.now();
 
   SpatialDirection? _targetDirection;
   bool _canRespond = false;
@@ -125,7 +125,9 @@ class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
               ),
             ],
           ),
-        ).then((_) => Navigator.pop(context));
+        ).then((_) {
+          if (mounted) Navigator.pop(context);
+        });
       }
     } catch (e) {
       if (mounted) {

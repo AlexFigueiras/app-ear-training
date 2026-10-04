@@ -185,7 +185,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
+                  color: Colors.white.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(32),
                   border: Border.all(color: Colors.white10),
                 ),
@@ -214,7 +214,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                   color: Colors.redAccent.shade100,
                   fontSize: 20,
                   fontWeight: FontWeight.w300,
-                  shadows: [Shadow(color: Colors.redAccent.withOpacity(0.5), blurRadius: 20)],
+                  shadows: [Shadow(color: Colors.redAccent.withValues(alpha: 0.5), blurRadius: 20)],
                 ),
               ),
 
@@ -233,8 +233,8 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                   margin: const EdgeInsets.symmetric(horizontal: 40),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
-                    border: Border.all(color: Colors.orange.withOpacity(0.5)),
+                    color: Colors.orange.withValues(alpha: 0.1),
+                    border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Row(
@@ -310,7 +310,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                         ),
                       ),
                       gridData: const FlGridData(show: true, drawVerticalLine: true, horizontalInterval: 20, verticalInterval: 1),
-                      borderData: FlBorderData(show: true, border: Border(bottom: BorderSide(color: Colors.white10), left: BorderSide(color: Colors.white10))),
+                      borderData: FlBorderData(show: true, border: const Border(bottom: BorderSide(color: Colors.white10), left: BorderSide(color: Colors.white10))),
                     ),
                   ),
                 ),
@@ -365,7 +365,7 @@ class _ResponseButton extends StatelessWidget {
       height: 130,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        boxShadow: [BoxShadow(color: color.withOpacity(0.3), blurRadius: 25, spreadRadius: 1)],
+        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 25, spreadRadius: 1)],
       ),
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
@@ -373,7 +373,7 @@ class _ResponseButton extends StatelessWidget {
           foregroundColor: textColor,
           shape: const CircleBorder(),
           elevation: 0,
-          side: BorderSide(color: Colors.white.withOpacity(0.1)),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
         ),
         onPressed: onPressed,
         child: Text(label, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 1.5)),

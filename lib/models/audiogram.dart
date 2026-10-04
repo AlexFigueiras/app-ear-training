@@ -1,4 +1,3 @@
-import 'dart:math';
 
 /// Representação das Orelhas
 enum EarSide { left, right, both }

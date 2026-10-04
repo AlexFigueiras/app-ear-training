@@ -1,3 +1,7 @@
+// AudioDeviceType (audio_session) é marcado experimental, mas é a única forma sem pacote
+// novo de saber se a saída é fone com fio, Bluetooth ou alto-falante.
+// ignore_for_file: experimental_member_use
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';

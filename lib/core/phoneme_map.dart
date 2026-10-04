@@ -1,4 +1,4 @@
-﻿const Map<String, dynamic> PHONEME_REHAB_DATA = {
+﻿const Map<String, dynamic> phonemeRehabData = {
   'level_2': [
     // --- ZONA ALTA (6kHz - 8kHz): Sibilantes e Fricativas Agudas ---
     {'target': 'Selo', 'distractor': 'Felo', 'freq_band': 6500, 'type': 'fricative'},

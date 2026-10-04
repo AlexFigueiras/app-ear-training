@@ -26,7 +26,7 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
   // Dose mínima efetiva para efeito de neuroplasticidade
   static const int _maxTrials = 20;
   int _correctAnswers = 0;
-  DateTime _sessionStart = DateTime.now();
+  final DateTime _sessionStart = DateTime.now();
 
   Map<String, dynamic>? _currentPhoneme;
   List<String> _options = [];
@@ -162,7 +162,7 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
+                color: Colors.white.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Row(

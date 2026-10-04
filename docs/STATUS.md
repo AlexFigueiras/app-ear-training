@@ -23,6 +23,26 @@
 | Checklist da Play (formulários, Data safety, contas, prazos) | 🟡 | `docs/PLAY_STORE.md` | Bloqueadores humanos: rotação de chaves, deploy das Edge Functions, migration 003, `[PREENCHER]` nos textos legais, conta de organização, revisão regulatória |
 | Trava automática de regressão de release | ✅ | `tool/checks/check_release_config.dart`, `tool/check_elf_alignment.dart`, job `release-check` | Testada nos dois sentidos (passa no estado atual, falha contra a config antiga) |
 
+## Plano "treino eficaz" (branch `claude/treino-eficaz`)
+Plano aprovado em 2026-10-04: 14 etapas (0–13), uma por vez; cada uma só fecha com CI verde +
+checklist de escuta no celular (APK de profile). Análise e porquês em `docs/DECISIONS.md`.
+| Etapa | Estado | Notas |
+|---|---|---|
+| 0 — Base verde (analyze limpo, job `native-tests`, APK de profile no CI) | 🟡 | Código pronto; aguardando CI e checklist no celular |
+| 1 — Limpeza e promessas | ⬜ | |
+| 2 — Áudio que sai errado (TTS 48 kHz, ruído que não desliga, Repetir) | ⬜ | |
+| 3 — Motor C++ consertado (EQ multibanda, bypass de medição, limitador) | ⬜ | |
+| 4 — Teste auditivo confiável | ⬜ | |
+| 5 — Banco de estímulos que obriga a ouvir | ⬜ | |
+| 6 — Feedback e fim de sessão | ⬜ | |
+| 7 — Dificuldade real + Coquetel com ruído de fala | ⬜ | |
+| 8 — Medida de progresso (dígitos no ruído) | ⬜ | |
+| 9 — Espacial redesenhado | ⬜ | |
+| 10 — Gamificação alinhada ao treino | ⬜ | |
+| 11 — Acessibilidade e linguagem | ⬜ | |
+| 12 — Documentação final + PR | ⬜ | |
+| 13 — Rebaixamento de frequência (opcional) | ⬜ | Só com validação de fonoaudiólogo |
+
 ## Produto — telas e fluxos
 | Feature / fluxo | Estado | Onde (código) | Notas / decisão |
 |---|---|---|---|
@@ -57,7 +77,7 @@
 | Arquivos soltos na raiz (`analysis.txt`, `build_log.txt`, `debug_env.log`, `write_test.txt`) | ⬜ | Lixo de debug versionado; não removido neste bootstrap (decisão do usuário, não higiene automática) |
 | Plataforma iOS ausente | 🚫 | Só `android/`, `web/`, `windows/` existem; fora de escopo deste bootstrap (decisão de stack/plataforma, não de governança) |
 | `skills-library/CATALOG.md` | 🟡 | Catálogo genérico de ~1.262 skills de mercado, **não curado para este projeto** (confirmado por leitura: contém skills de Angular, Godot, Elixir etc., sem relação com Flutter/audiologia). Distinto de `.agent/skills/`, que É específico deste projeto. Ver `docs/DECISIONS.md`. |
-| `flutter analyze` ainda falha no CI por infos/warnings pré-existentes | 🟡 | Os 2 erros reais foram corrigidos em 2026-10-04 (`training_dashboard.dart` usava getter removido; `widget_test.dart` usava `MyApp` inexistente). Restam ~43 infos/warnings de código não tocado (maioria `withOpacity` deprecado, `AudioDeviceType` experimental, `shared_preferences`/`ffi` usados sem declarar no pubspec — declarar exige aprovação, AGENTS.md §2.4). `flutter analyze` trata infos como fatais por padrão |
+| `flutter analyze` limpo | ✅ | Resolvido na Etapa 0 do plano de treino eficaz (2026-10-04): 0 issues. `ffi` e `shared_preferences` declarados no pubspec com aprovação do usuário (já eram usados via dependência transitiva) |
 | `dart format` — 29 dos 33 arquivos `.dart` de `lib/` não estão formatados no padrão `dart format` | ⬜ | Descoberto ao tentar endurecer o step "Verify formatting" do CI. Reformatar é whitespace-only, mas toca todo `lib/` — mantido como `continue-on-error: true` no CI por decisão explícita (ver `.github/workflows/ci.yml` e `docs/DECISIONS.md`), não corrigido neste bootstrap. |
 | `flutter test` não executa localmente nesta máquina | 🟡 | Falta toolchain de compilador C (Visual Studio Build Tools/MSVC) para o build de native assets do pacote `win32` (dependência transitiva de `device_info_plus`); desligar native assets não resolve (`win32` os exige). Não deve reproduzir no CI (`ubuntu-latest` tem `gcc`). `dart tool/verify_rules.dart` roda normalmente (reverificado em 2026-10-04). Esta máquina também não tem Android SDK: build Android só no CI |
 

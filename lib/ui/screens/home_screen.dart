@@ -233,7 +233,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const Text("BOSYN — REABILITAÇÃO NEURAL", style: TextStyle(color: Colors.white38, letterSpacing: 5, fontSize: 10)),
             const SizedBox(height: 8),
             Text("STATUS: ${controller.acuityLevel}", style: const TextStyle(color: Color(0xFF00FF41), fontSize: 24, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
-            Container(height: 2, width: 120, color: const Color(0xFF00FF41).withOpacity(0.5)),
+            Container(height: 2, width: 120, color: const Color(0xFF00FF41).withValues(alpha: 0.5)),
           ],
         ),
         Row(
@@ -309,7 +309,7 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xFF111111),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -371,7 +371,7 @@ class _HomeScreenState extends State<HomeScreen> {
               barWidth: 3,
               isStrokeCapRound: true,
               dotData: const FlDotData(show: true),
-              belowBarData: BarAreaData(show: true, color: const Color(0xFF00FF41).withOpacity(0.1)),
+              belowBarData: BarAreaData(show: true, color: const Color(0xFF00FF41).withValues(alpha: 0.1)),
             ),
           ],
         ),
@@ -398,7 +398,7 @@ class _HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: const Color(0xFF111111),
-          border: Border.all(color: isLocked ? Colors.white10 : const Color(0xFF2563EB).withOpacity(0.3)),
+          border: Border.all(color: isLocked ? Colors.white10 : const Color(0xFF2563EB).withValues(alpha: 0.3)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,

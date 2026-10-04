@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/event_buffer.dart';
 import '../services/audio_service_manager.dart';
-import '../services/supabase_service.dart';
 
 /// CONTROLADOR DE ACUIDADE ESPACIAL [ESCALONAMENTO-N3]
 /// Gerencia a lógica de localização binaural e tracking de erro angular.

@@ -17,7 +17,6 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
   late Timer _ticker;
   double _dspLoad = 0.0;
   int _xRuns = 0;
-  bool _isSoftKneeActive = false;
   double _softKneeOpacity = 0.0;
   List<String> _pendingFiles = [];
   String _socModel = "Detecting...";
@@ -37,11 +36,9 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
         _dspLoad = native.getDspLoad();
         _xRuns = native.getXRunCount();
         if (hit) {
-          _isSoftKneeActive = true;
           _softKneeOpacity = 1.0;
         } else {
           _softKneeOpacity = (_softKneeOpacity - 0.1).clamp(0.0, 1.0);
-          if (_softKneeOpacity == 0.0) _isSoftKneeActive = false;
         }
       });
     });
@@ -100,7 +97,7 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
           // SoC Info Row
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: Colors.blueAccent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
             child: Row(
               children: [
                 const Icon(Icons.memory, color: Colors.blueAccent, size: 14),
@@ -124,7 +121,7 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
           // Row 2: Soft-Knee Visualizer (Diagnostics)
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12)),
             child: Row(
               children: [
                 AnimatedOpacity(
@@ -155,7 +152,7 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
                   itemCount: _pendingFiles.length,
                   itemBuilder: (context, i) => Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    child: Text(_pendingFiles[i], style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 10, fontFamily: 'monospace')),
+                    child: Text(_pendingFiles[i], style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 10, fontFamily: 'monospace')),
                   ),
                 ),
           ),
@@ -182,7 +179,7 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
+        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

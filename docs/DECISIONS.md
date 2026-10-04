@@ -1,6 +1,47 @@
 # DECISIONS — histórico vivo de decisões
 > Entradas no topo (mais recente primeiro). Estado do que existe fica em `docs/STATUS.md`.
 
+## [2026-10-04] Plano "treino eficaz" aprovado — Etapa 0 (base verde)
+- **Status:** accepted (Etapa 0 aguardando CI + checklist no celular)
+- **Contexto:** a análise do treino mostrou que ele não melhora a percepção de consoantes
+  agudas:
+  - a resposta de cada par é memorizável, porque só o alvo toca e cada par tem resposta fixa;
+  - metade do banco treina vozeamento/nasalidade, que são pistas graves;
+  - o "boost" satura no clamp de 4×;
+  - a cadeia DSP nativa está quebrada (`pffft.c` é placeholder e `PartitionedFIR` estoura
+    `overlapBuffer` no callback) e distorce até o teste auditivo (o "TEE" com γ=0,7 é um
+    compressor);
+  - o TTS chega a 24 kHz e toca a 48 kHz;
+  - o ruído do Coquetel nunca desliga;
+  - o Espacial é monaural;
+  - o XP dobra nas tarefas fáceis e o "nível de acuidade" é só XP.
+- **Decisões do usuário:**
+  - Verificar cada etapa por CI + APK no celular.
+  - Redesenhar o Espacial.
+  - Trocar a Energia Neural por limite de tempo.
+  - Progressão por domínio, mantendo o PRO.
+  - **Manter o motor em C++/Oboe e consertá-lo**, trocando FIR/FFT/TEE por EQ de biquads, o
+    que não exige biblioteca nova.
+  - Commitar antes o trabalho pendente da Play (commit `6e92873`).
+- **Etapa 0:**
+  - `flutter analyze` foi de 51 issues para 0, com correções mecânicas (`withOpacity` →
+    `withValues`, imports e campos sem uso, `final`/`const`, `phonemeRehabData`, `mounted`
+    antes de `Navigator.pop`).
+  - `AudioDeviceType` ganhou um `ignore` justificado.
+  - `ffi` e `shared_preferences` foram declarados no pubspec. Já eram usados por dependência
+    transitiva, então nenhum pacote novo entra no app; aprovado pelo usuário no plano.
+  - Job novo `native-tests` no CI: compila `cpp/tests/*_test.cpp` no host com ASan/UBSan.
+    Primeiro teste: resposta em frequência dos biquads, que serão a base do EQ da Etapa 3.
+  - O CI passa a gerar também o APK de **profile**, usado no checklist de escuta (o debug roda
+    em JIT e distorce tempo e fluidez).
+- **Arquivos impactados:** `pubspec.yaml`, `pubspec.lock`, `.github/workflows/ci.yml`,
+  `cpp/tests/check.h`, `cpp/tests/biquad_test.cpp`, ~17 arquivos de `lib/` (só correções do
+  analyzer), `docs/STATUS.md`.
+- **Consequências:**
+  - Nenhum comportamento do app muda nesta etapa.
+  - O plano completo fica em STATUS (seção "Plano treino eficaz").
+  - As etapas seguintes só começam depois do "ok" do usuário no checklist.
+
 ## [2026-10-04] Entrada e conta revisadas pela auditoria de UX (etapa A)
 - **Status:** accepted (código); a recuperação de senha depende de ajuste no modelo de e-mail
 - **Contexto:** a auditoria de UX da jornada do paciente (artifact "Auditoria UX BOSYN",

@@ -128,7 +128,7 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
     }
   }
 
-  List<bool> _level4History = []; // Rastreador de regressão [INTELIGÊNCIA]
+  final List<bool> _level4History = []; // Rastreador de regressão [INTELIGÊNCIA]
 
   void _handleN4Choice(String choice) {
     if (_currentStimulus == null) return;
@@ -169,7 +169,7 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
   }
 
   void _startLevel3() {
-    final stimuli = PHONEME_REHAB_DATA['level_2'] as List; // Reuso de fonemas agudos
+    final stimuli = phonemeRehabData['level_2'] as List; // Reuso de fonemas agudos
     setState(() {
       _currentStimulus = stimuli[math.Random().nextInt(stimuli.length)];
       // Sorteia pan: -1.0 (L), 0.0 (C), 1.0 (R)
@@ -280,7 +280,7 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           border: Border.all(color: isSelected ? const Color(0xFF00FF41) : Colors.white12),
-          color: isSelected ? const Color(0xFF00FF41).withOpacity(0.05) : Colors.transparent,
+          color: isSelected ? const Color(0xFF00FF41).withValues(alpha: 0.05) : Colors.transparent,
         ),
         child: Center(
           child: Text(label, style: TextStyle(color: isSelected ? const Color(0xFF00FF41) : Colors.white38, fontSize: 8, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
@@ -315,7 +315,7 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: isCritical ? const Color(0xFFE11D48).withOpacity(0.1) : const Color(0xFF1A1A1A),
+        color: isCritical ? const Color(0xFFE11D48).withValues(alpha: 0.1) : const Color(0xFF1A1A1A),
         border: Border.all(color: isCritical ? const Color(0xFFE11D48) : const Color(0xFF333333)),
       ),
       child: Column(
@@ -527,17 +527,17 @@ class SonarPainter extends CustomPainter {
     final radius = size.width / 2;
     
     // Grades do Sonar
-    final paint = Paint()..color = Colors.white.withOpacity(0.05)..style = PaintingStyle.stroke;
+    final paint = Paint()..color = Colors.white.withValues(alpha: 0.05)..style = PaintingStyle.stroke;
     canvas.drawCircle(center, radius, paint);
     canvas.drawCircle(center, radius * 0.6, paint);
     
     // Linha de Panning
-    final linePaint = Paint()..color = const Color(0xFF00FF41).withOpacity(0.2)..strokeWidth = 1.0;
+    final linePaint = Paint()..color = const Color(0xFF00FF41).withValues(alpha: 0.2)..strokeWidth = 1.0;
     canvas.drawLine(center, center + Offset(angle * radius, -math.sqrt(radius*radius - (angle*radius)*(angle*radius))), linePaint);
 
     if (isPulse && progress > 0) {
       final pulsePaint = Paint()
-        ..color = const Color(0xFF00FF41).withOpacity(1.0 - progress)
+        ..color = const Color(0xFF00FF41).withValues(alpha: 1.0 - progress)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 4.0;
       

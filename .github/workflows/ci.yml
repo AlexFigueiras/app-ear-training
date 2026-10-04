@@ -105,6 +105,38 @@ jobs:
           path: build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 14
 
+      # APK de PROFILE: é o usado no checklist de escuta no celular. O debug roda em JIT e fica
+      # lento, o que distorce tempo de resposta e fluidez do áudio durante os testes manuais.
+      - name: Build profile APK
+        run: flutter build apk --profile --dart-define-from-file=.env
+
+      - name: Upload profile APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bosyn-profile-apk
+          path: build/app/outputs/flutter-apk/app-profile.apk
+          retention-days: 14
+
+  # Testes do motor nativo (cpp/) compilados no host com sanitizers: pegam estouro de memória,
+  # comportamento indefinido e erros de DSP sem precisar de celular. Cada cpp/tests/*_test.cpp é
+  # um executável independente (ver cpp/tests/check.h).
+  native-tests:
+    name: Native tests (C++ host, ASan/UBSan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile and run cpp/tests
+        run: |
+          set -e
+          for test in cpp/tests/*_test.cpp; do
+            echo "== $test"
+            g++ -std=c++17 -O1 -g -Wall -Wextra \
+              -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer \
+              -Icpp -Icpp/tests -o /tmp/native_test "$test"
+            /tmp/native_test
+          done
+
   # Build de RELEASE descartável: prova que R8/minify, CMake/NDK e assinatura de fallback
   # funcionam, e trava o requisito de páginas de 16 KB da Google Play (apps com código nativo).
   # Este APK nunca é distribuído — o AAB da Play é gerado localmente com a chave de upload

@@ -125,7 +125,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: _isPlaying ? const Color(0xFF00FF41) : Colors.white10, width: 4),
-                  boxShadow: _isPlaying ? [BoxShadow(color: const Color(0xFF00FF41).withOpacity(0.2), blurRadius: 20)] : [],
+                  boxShadow: _isPlaying ? [BoxShadow(color: const Color(0xFF00FF41).withValues(alpha: 0.2), blurRadius: 20)] : [],
                 ),
                 child: Center(
                   child: Text(

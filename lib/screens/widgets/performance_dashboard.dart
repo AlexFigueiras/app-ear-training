@@ -106,7 +106,11 @@ class LinearTrendPainter extends CustomPainter {
       final String hwType = data[i]['output_hardware'] ?? 'unknown';
       final Color dotColor = hwType == 'bluetooth' ? Colors.amberAccent : Colors.greenAccent;
       
-      if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
       
       // Pontos de dados coloridos por hardware
       canvas.drawCircle(Offset(x, y), 5, Paint()..color = dotColor);

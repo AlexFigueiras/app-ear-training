@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -25,9 +24,9 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
   // Protocolo de dose: 25 trials/sessão (evidência: Sweetow & Sabes 2006)
   static const int _maxTrials = 25;
   int _correctAnswers = 0;
-  DateTime _sessionStart = DateTime.now();
+  final DateTime _sessionStart = DateTime.now();
 
-  // Seleção atual a partir de PHONEME_REHAB_DATA (inclui freq_band)
+  // Seleção atual a partir de phonemeRehabData (inclui freq_band)
   Map<String, dynamic>? _currentPhoneme;
   List<String> _options = [];
   bool _canRespond = false;
@@ -255,8 +254,8 @@ class _PulseIconState extends State<_PulseIcon> with SingleTickerProviderStateMi
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: Colors.blueAccent.withOpacity(0.05),
-          border: Border.all(color: Colors.blueAccent.withOpacity(0.1)),
+          color: Colors.blueAccent.withValues(alpha: 0.05),
+          border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.1)),
         ),
         child: const Icon(Icons.hearing, size: 64, color: Colors.blueAccent),
       ),

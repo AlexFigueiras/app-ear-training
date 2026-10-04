@@ -38,7 +38,7 @@ class RehabTrendsChart extends StatelessWidget {
             const Text("EVOLUÇÃO DA ACURÁCIA", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1.2)),
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
               child: Text("CRITICAL GAP: $criticalGap", style: const TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
             ),
           ],
@@ -58,7 +58,7 @@ class RehabTrendsChart extends StatelessWidget {
                   belowBarData: BarAreaData(
                     show: true,
                     gradient: LinearGradient(
-                      colors: [Colors.greenAccent.withOpacity(0.2), Colors.transparent],
+                      colors: [Colors.greenAccent.withValues(alpha: 0.2), Colors.transparent],
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                     ),
