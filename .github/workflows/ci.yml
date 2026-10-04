@@ -64,8 +64,11 @@ jobs:
           jq -Rrs '
             [split("\n")[] | fromjson? | select(type == "object")] as $events
             | ($events | map(select(.type == "testStart") | {key: (.test.id | tostring), value: .test.name}) | from_entries) as $names
-            | $events[] | select(.type == "error")
-            | "::error title=\($names[.testID | tostring] // "teste")::\(.error | gsub("[\r\n]+"; " ") | .[0:900])"
+            | $events[] | select(.type == "error" or .type == "print")
+            # A exceção de verdade chega como evento "print" (bloco "EXCEPTION CAUGHT BY FLUTTER
+            # TEST FRAMEWORK"); o "error" que vem depois só diz "See exception logs above".
+            | ((.error // .message) | .[0:3000] | gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A")) as $text
+            | "::error title=\($names[.testID | tostring] // "teste")::\($text)"
           ' test-results.jsonl
           jq -Rrs '[split("\n")[] | fromjson? | select(type == "object" and .type == "done")] | .[0] // "sem evento done"' test-results.jsonl
           exit $status
