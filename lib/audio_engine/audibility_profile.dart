@@ -41,9 +41,18 @@ class AudibilityProfile {
     return AudibilityProfile(apply(left), apply(right));
   }
 
+  /// Limiar de uma orelha em [freq] (interpolado em escala log), ou null sem dados.
+  static double? thresholdAt(List<AudiometryPoint> points, int freq) {
+    final air = _sortedAir(points);
+    return air.isEmpty ? null : _interpolate(air, freq);
+  }
+
+  static List<AudiometryPoint> _sortedAir(List<AudiometryPoint> points) =>
+      points.where((p) => p.conduction == ConductionType.air).toList()
+        ..sort((a, b) => a.frequency.compareTo(b.frequency));
+
   static List<double> _earGains(List<AudiometryPoint> points) {
-    final air = points.where((p) => p.conduction == ConductionType.air).toList()
-      ..sort((a, b) => a.frequency.compareTo(b.frequency));
+    final air = _sortedAir(points);
     if (air.isEmpty) return List.filled(bands.length, 0.0);
 
     final thresholds = [for (final f in bands) _interpolate(air, f)];

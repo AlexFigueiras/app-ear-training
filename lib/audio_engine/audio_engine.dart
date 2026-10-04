@@ -49,10 +49,27 @@ class AudioRehabEngine {
       _nativeBridge.setEqTargets(profile.left, profile.right);
 
   /// Sintetiza (ou lê do cache), decodifica a 48 kHz e normaliza o RMS da palavra.
-  Future<Float32List> _loadSpeech(String text) async {
-    final path = await _tts.synthesize(text);
+  /// Se a voz pedida falhar (ex.: indisponível no Google), usa a voz padrão.
+  Future<Float32List> _loadSpeech(String text, {String? voice}) async {
+    String path;
+    try {
+      path = voice == null ? await _tts.synthesize(text) : await _tts.synthesize(text, voiceName: voice);
+    } catch (e) {
+      if (voice == null) rethrow;
+      debugPrint("TTS: voz $voice falhou ($e); usando a padrão.");
+      path = await _tts.synthesize(text);
+    }
     final bytes = await File(path).readAsBytes();
     return SignalLevel.normalizeRms(WavDecoder.decodeToRate(bytes).samples);
+  }
+
+  /// Baixa e guarda no cache a palavra da próxima tentativa enquanto a pessoa responde a atual.
+  Future<void> prefetchSpeech(String text, {String? voice}) async {
+    try {
+      await _loadSpeech(text, voice: voice);
+    } catch (_) {
+      // Sem rede agora: a tentativa tenta de novo na hora de tocar.
+    }
   }
 
   Duration _durationOf(Float32List samples) =>
@@ -70,11 +87,12 @@ class AudioRehabEngine {
   /// Devolve a duração: a tela só libera a resposta depois que a palavra termina.
   Future<Duration> playPhonemicStimulus({
     required String text,
+    String? voice,
     required double freqBand,
     double extraBoostDb = 0.0,
   }) async {
     _verifySecurityScope();
-    final samples = await _loadSpeech(text);
+    final samples = await _loadSpeech(text, voice: voice);
     _prepareSpeech(boostDb: extraBoostDb);
     _loadSampleToNative(samples);
     debugPrint("ESTÍMULO N2: '$text' | banda $freqBand Hz | boost agudo +${extraBoostDb.toStringAsFixed(1)} dB");
@@ -84,11 +102,12 @@ class AudioRehabEngine {
   /// Espacial (provisório: redesenho na Etapa 9 do plano).
   Future<Duration> playSpatialStimulus({
     required String text,
+    String? voice,
     required double panning,
     double freqBand = 4000.0,
   }) async {
     _verifySecurityScope();
-    final samples = await _loadSpeech(text);
+    final samples = await _loadSpeech(text, voice: voice);
     _prepareSpeech(panning: panning);
     _loadSampleToNative(samples);
     return _durationOf(samples);
@@ -99,12 +118,13 @@ class AudioRehabEngine {
   /// Provisório: ruído branco até a Etapa 7 (ruído de fala/babble).
   Future<Duration> playCocktailStimulus({
     required String text,
+    String? voice,
     required double snrDb,
     required String noiseEnvironment,
     double freqBand = 4000.0,
   }) async {
     _verifySecurityScope();
-    final samples = await _loadSpeech(text);
+    final samples = await _loadSpeech(text, voice: voice);
     _prepareSpeech(noise: SignalLevel.whiteNoiseAmplitudeForSnr(snrDb).clamp(0.0, 0.8));
     _loadSampleToNative(samples);
     debugPrint("COQUETEL: SNR=$snrDb dB | ambiente=$noiseEnvironment");

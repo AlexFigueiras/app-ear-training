@@ -7,6 +7,7 @@ import '../core/gamification_controller.dart';
 import '../models/audiogram.dart';
 import '../models/rehab_session.dart';
 import '../services/audio_service_manager.dart';
+import '../training/item_selector.dart';
 import 'hearing_test/hearing_test_flow.dart';
 import '../services/supabase_service.dart';
 
@@ -31,8 +32,11 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
   int _correctAnswers = 0;
   final DateTime _sessionStart = DateTime.now();
 
-  Map<String, dynamic>? _currentPhoneme;
-  List<String> _options = [];
+  // Palavras do banco novo (qualquer uma do par pode tocar). Sem aquecimento: no ruído, só
+  // contrastes agudos.
+  late ItemSelector _selector;
+  Trial? _trial;
+  List<String> get _options => _trial?.options ?? const [];
   bool _canRespond = false;
   bool _isPlaying = false;
 
@@ -41,15 +45,11 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
 
   final List<Map<String, dynamic>> _sessionLog = [];
 
-  List<Map<String, dynamic>> get _audiogramData => [
-    ..._audiogram.leftEar.map((p) => {'frequency': p.frequency, 'threshold': p.threshold}),
-    ..._audiogram.rightEar.map((p) => {'frequency': p.frequency, 'threshold': p.threshold}),
-  ];
-
   @override
   void initState() {
     super.initState();
     _audiogram = widget.audiogram;
+    _selector = ItemSelector(audiogram: _audiogram, warmUpTrials: 0);
     _gamification.resetEnergyForNewSession();
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
   }
@@ -58,6 +58,7 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
   Future<void> _bootstrap() async {
     _audiogram = await HearingTestFlow.ensureCurrent(context, _audiogram);
     if (!mounted) return;
+    _selector = ItemSelector(audiogram: _audiogram, warmUpTrials: 0);
     await _engine.initializeEngine(_audiogram);
     _startTrial();
   }
@@ -69,8 +70,7 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
     }
 
     // Fonema priorizado pela zona de perda do paciente
-    _currentPhoneme = _gamification.getSmartPhoneme(_audiogramData);
-    _options = [_currentPhoneme!['target'] as String, _currentPhoneme!['distractor'] as String]..shuffle();
+    _trial = _selector.next();
     _currentEnvironment = _noiseEnvironments[Random().nextInt(3)];
 
     setState(() => _canRespond = false);
@@ -79,17 +79,19 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
 
   /// Toca a palavra no ruído e só libera a resposta quando ela termina.
   Future<void> _playStimulus() async {
-    if (_currentPhoneme == null || _isPlaying) return;
+    final trial = _trial;
+    if (trial == null || _isPlaying) return;
     setState(() {
       _isPlaying = true;
       _canRespond = false;
     });
     try {
       final duration = await _engine.playCocktailStimulus(
-        text: _currentPhoneme!['target'] as String,
+        text: trial.played,
+        voice: trial.voice,
         snrDb: _currentSnr,
         noiseEnvironment: _currentEnvironment,
-        freqBand: (_currentPhoneme!['freq_band'] as num).toDouble(),
+        freqBand: trial.pair.contrast.cueBandHz.toDouble(),
       );
       await Future.delayed(duration);
       if (!mounted) return;
@@ -113,11 +115,13 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
   }
 
   void _handleResponse(String selected) {
-    if (!_canRespond || _currentPhoneme == null) return;
+    final trial = _trial;
+    if (!_canRespond || trial == null) return;
 
     // SNR em que a palavra foi de fato apresentada (o log antigo gravava o valor já atualizado).
     final presentedSnr = _currentSnr;
-    final isCorrect = selected == _currentPhoneme!['target'];
+    final isCorrect = trial.isCorrect(selected);
+    _selector.record(trial, correct: isCorrect);
     if (isCorrect) {
       _correctAnswers++;
       // Staircase: acerto → SNR mais baixo (mais ruído = mais difícil)
@@ -132,8 +136,11 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
 
     _sessionLog.add({
       'trial': _currentTrial + 1,
-      'target': _currentPhoneme!['target'],
-      'freq_band': _currentPhoneme!['freq_band'],
+      'pair': trial.pair.id,
+      'contrast': trial.pair.contrast.name,
+      'played': trial.played,
+      'voice': trial.voice,
+      'selected': selected,
       'snr_presented': presentedSnr,
       'environment': _currentEnvironment,
       'correct': isCorrect,
@@ -239,7 +246,7 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
               style: TextStyle(color: Colors.grey),
             ),
             Text(
-              "Trial ${_currentTrial + 1} / $_maxTrials",
+              "Palavra ${(_currentTrial + 1).clamp(1, _maxTrials)} de $_maxTrials",
               style: const TextStyle(color: Colors.white24, fontSize: 11, fontFamily: 'monospace'),
             ),
             const Spacer(),

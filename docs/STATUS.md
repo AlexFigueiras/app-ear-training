@@ -32,8 +32,8 @@ checklist de escuta no celular (APK de profile). Análise e porquês em `docs/DE
 | 1 — Limpeza e promessas | ✅ | CI verde; checklist ok do usuário |
 | 2 — Áudio que sai errado (TTS 48 kHz, ruído que não desliga, Repetir) | 🟡 | CI verde (run 37240201716). Checklist no celular adiado pelo usuário (fazer junto com a Etapa 3). **Ação humana:** publicar a Edge Function `tts` atualizada |
 | 3 — Motor C++ consertado (EQ multibanda, bypass de medição, limitador) | 🟡 | CI verde (run 37241421987, inclui TSan). Checklist no celular adiado pelo usuário |
-| 4 — Teste auditivo confiável | 🟡 | Código pronto (achados C1–C4 da auditoria de UX); aguardando CI e checklist. Botão "Refazer teste" na Home já existe (feito pela sessão da auditoria) e abre o teste novo |
-| 5 — Banco de estímulos que obriga a ouvir | ⬜ | |
+| 4 — Teste auditivo confiável | 🟡 | CI verde (run 37243740170). Checklist no celular adiado pelo usuário. Home e onboarding abrem o teste novo (commit 66031f6, auditoria de UX) |
+| 5 — Banco de estímulos que obriga a ouvir | 🟡 | Código pronto (achado D1); aguardando CI e checklist |
 | 6 — Feedback e fim de sessão | ⬜ | |
 | 7 — Dificuldade real + Coquetel com ruído de fala | ⬜ | |
 | 8 — Medida de progresso (dígitos no ruído) | ⬜ | |
@@ -53,7 +53,7 @@ checklist de escuta no celular (APK de profile). Análise e porquês em `docs/DE
 | Calibração de latência | 🟡 | `lib/ui/screens/calibration_screen.dart` | Travava no primeiro toque (símbolo nativo `get_current_timestamp_ns` inexistente) — corrigido na Etapa 2. Bip a -20 dBFS com rampa |
 | Home / dashboard de treino | 🟡 | `lib/ui/screens/home_screen.dart`, `lib/ui/screens/home_widgets.dart` | Achado E2 da auditoria de UX: cartão "Comece pelo teste de audição" para quem não tem audiograma, gráfico vazio com texto (sem ponto falso em 0%), "Refazer teste de audição" para quem já tem, Home rolável (360×640 e fonte 200% sem corte). Coberto por `test/home_widgets_test.dart`. Indicadores (XP, streak, gráfico) seguem para a Etapa 10 do plano. Existe **duplicidade estrutural**: há uma segunda árvore de telas em `lib/screens/` paralela a `lib/ui/screens/` — não resolvida neste bootstrap (decisão que toca `lib/`, fora de escopo, ver `docs/ARCHITECTURE.md`) |
 | Teste auditivo (limiar tonal) | 🟡 | `lib/screens/threshold_test_screen.dart`, `lib/screens/hearing_test/`, `lib/training/threshold_procedure.dart`, `hearing_test_session.dart`, `hearing_summary.dart`, `lib/services/audio_output_service.dart` | Etapa 4: Hughson-Westlake modificado com tentativas silenciosas (2 de verificação antes de aceitar), "sem resposta" no máximo, 250 Hz–8 kHz com 3/6 k e reteste de 1 k, tom pulsado sem processamento, fone e volume fixo checados, resultado rolável com audiograma clínico, categoria OMS aproximada e próximo passo. **Triagem relativa, não dB HL clínico.** Precisão em simulação: ~80% a ±5 dB, ~100% a ±10 dB |
-| Discriminação fonêmica | 🟡 | `lib/screens/phonemic_discrimination_screen.dart`, `lib/core/phoneme_map.dart` | Existe |
+| Discriminação fonêmica ("Palavras parecidas") | 🟡 | `lib/screens/phonemic_discrimination_screen.dart`, `lib/training/stimulus_bank.dart`, `lib/training/item_selector.dart` | Etapa 5: 49 pares de palavras reais (s×ch, s×f, t×p, t×k, plural, + aquecimento grave); qualquer palavra do par toca; 3 vozes; seleção por perda e erros recentes; guarda de audibilidade. Feedback e resumo vêm na Etapa 6; escada definitiva na Etapa 7 |
 | Atenção espacial | 🟡 | `lib/screens/spatial_attention_screen.dart` | Existe; monaural e sem adaptação — redesenho na Etapa 9 |
 | Fala no ruído (Speech-in-Noise) | 🟡 | `lib/screens/speech_in_noise_screen.dart` | Existe |
 | Gamificação (XP / Energia Neural / Streak) | 🟡 | `lib/core/gamification_controller.dart` | Existe |

@@ -6,10 +6,12 @@ import '../core/gamification_controller.dart';
 import '../models/audiogram.dart';
 import '../models/rehab_session.dart';
 import '../services/audio_service_manager.dart';
+import '../services/supabase_service.dart';
+import '../training/item_selector.dart';
 import 'hearing_test/hearing_test_flow.dart';
 import 'widgets/phonemic_widgets.dart';
-import '../services/supabase_service.dart';
 
+/// Treino "Palavras parecidas" (discriminação de pares mínimos).
 class PhonemicDiscriminationScreen extends StatefulWidget {
   final Audiogram audiogram;
   const PhonemicDiscriminationScreen({super.key, required this.audiogram});
@@ -20,6 +22,7 @@ class PhonemicDiscriminationScreen extends StatefulWidget {
 
 class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScreen> {
   late Audiogram _audiogram;
+  late ItemSelector _selector;
   final AudioRehabEngine _engine = AudioRehabEngine();
   final SupabaseService _supabase = SupabaseService();
   final GamificationController _gamification = GamificationController();
@@ -30,15 +33,15 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
   int _correctAnswers = 0;
   final DateTime _sessionStart = DateTime.now();
 
-  // Seleção atual a partir de phonemeRehabData (inclui freq_band)
-  Map<String, dynamic>? _currentPhoneme;
-  List<String> _options = [];
+  Trial? _trial;
+  Trial? _upcoming; // próxima tentativa, já baixada enquanto a pessoa responde a atual
   bool _canRespond = false;
   bool _isPlaying = false;
 
-  // Staircase 2-down/1-up: constrói dificuldade progressiva sem frustrar
+  // Dificuldade: reforço extra só nas bandas agudas (>= 3 kHz). Provisório: escada 2-abaixo/
+  // 1-acima; a escada definitiva (3-abaixo/1-acima, salva entre sessões) vem na Etapa 7.
   int _consecutiveCorrect = 0;
-  double _extraBoostDb = 6.0; // Começa facilitado; reduz com acertos
+  double _extraBoostDb = 6.0;
 
   final List<Map<String, dynamic>> _sessionLog = [];
 
@@ -46,50 +49,63 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
   void initState() {
     super.initState();
     _audiogram = widget.audiogram;
+    _selector = ItemSelector(audiogram: _audiogram);
     _gamification.resetEnergyForNewSession();
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
   }
 
-  /// Audiograma do teste antigo? Oferece refazer antes de treinar (o EQ usa o audiograma).
+  /// Audiograma do teste antigo? Oferece refazer antes de treinar (o EQ e a escolha das
+  /// palavras usam o audiograma).
   Future<void> _bootstrap() async {
     _audiogram = await HearingTestFlow.ensureCurrent(context, _audiogram);
     if (!mounted) return;
+    _selector = ItemSelector(audiogram: _audiogram);
     await _engine.initializeEngine(_audiogram);
+    if (_selector.nothingAudible && mounted) await _warnInaudible();
     _startTrial();
   }
 
-  // Constrói audiogramData para seleção inteligente de fonemas
-  List<Map<String, dynamic>> get _audiogramData => [
-    ..._audiogram.leftEar.map((p) => {'frequency': p.frequency, 'threshold': p.threshold}),
-    ..._audiogram.rightEar.map((p) => {'frequency': p.frequency, 'threshold': p.threshold}),
-  ];
+  /// Guarda de audibilidade: nenhuma pista aguda chega ao ouvido nem no máximo.
+  Future<void> _warnInaudible() => showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Os sons agudos estão fora do alcance'),
+          content: const Text(
+            'Pelo seu teste, os sons agudos das palavras (como o "s") não chegam ao seu ouvido nem '
+            'no volume máximo. Treinar não consegue criar essa percepção. Procure um '
+            'fonoaudiólogo: um aparelho auditivo pode trazer esses sons de volta. '
+            'Por enquanto, o treino vai usar só palavras com sons mais graves.',
+            style: TextStyle(fontSize: 16),
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Entendi'))],
+        ),
+      );
 
   void _startTrial() {
     if (_currentTrial >= _maxTrials) {
       _finishSession();
       return;
     }
-
-    // Seleciona fonema priorizando a zona de perda do paciente
-    _currentPhoneme = _gamification.getSmartPhoneme(_audiogramData);
-    _options = [_currentPhoneme!['target'] as String, _currentPhoneme!['distractor'] as String]..shuffle();
-
+    _trial = _upcoming ?? _selector.next();
+    _upcoming = _selector.next();
+    _engine.prefetchSpeech(_upcoming!.played, voice: _upcoming!.voice);
     setState(() => _canRespond = false);
     _playTarget();
   }
 
-  /// Toca a palavra e só libera a resposta quando ela termina (antes a resposta era liberada no
-  /// instante em que o áudio era carregado, e a próxima tentativa cortava a palavra no meio).
+  /// Toca a palavra e só libera a resposta quando ela termina.
   Future<void> _playTarget() async {
-    if (_currentPhoneme == null || _isPlaying) return;
+    final trial = _trial;
+    if (trial == null || _isPlaying) return;
     setState(() {
       _isPlaying = true;
       _canRespond = false;
     });
     try {
       final duration = await _engine.playPhonemicStimulus(
-        text: _currentPhoneme!['target'] as String,
-        freqBand: (_currentPhoneme!['freq_band'] as num).toDouble(),
+        text: trial.played,
+        voice: trial.voice,
+        freqBand: trial.pair.contrast.cueBandHz.toDouble(),
         extraBoostDb: _extraBoostDb,
       );
       await Future.delayed(duration);
@@ -113,35 +129,38 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
   }
 
   void _handleResponse(String selected) {
-    if (!_canRespond || _currentPhoneme == null) return;
+    final trial = _trial;
+    if (!_canRespond || trial == null) return;
 
-    final isCorrect = selected == _currentPhoneme!['target'];
+    final isCorrect = trial.isCorrect(selected);
+    final presentedBoost = _extraBoostDb;
+    _selector.record(trial, correct: isCorrect);
 
-    // Staircase 2-down/1-up
     if (isCorrect) {
       _correctAnswers++;
       _consecutiveCorrect++;
       if (_consecutiveCorrect >= 2) {
         _consecutiveCorrect = 0;
-        _extraBoostDb = (_extraBoostDb - 3.0).clamp(0.0, 18.0); // Mais difícil
+        _extraBoostDb = (_extraBoostDb - 3.0).clamp(0.0, 18.0); // mais difícil
       }
       HapticFeedback.lightImpact();
     } else {
       _consecutiveCorrect = 0;
-      _extraBoostDb = (_extraBoostDb + 3.0).clamp(0.0, 18.0); // Mais fácil
+      _extraBoostDb = (_extraBoostDb + 3.0).clamp(0.0, 18.0); // mais fácil
       _gamification.consumeEnergy();
       HapticFeedback.heavyImpact();
     }
 
     _sessionLog.add({
       'trial': _currentTrial + 1,
-      'target': _currentPhoneme!['target'],
-      'distractor': _currentPhoneme!['distractor'],
-      'freq_band': _currentPhoneme!['freq_band'],
-      'type': _currentPhoneme!['type'],
+      'pair': trial.pair.id,
+      'contrast': trial.pair.contrast.name,
+      'cue_band_hz': trial.pair.contrast.cueBandHz,
+      'played': trial.played,
+      'voice': trial.voice,
       'selected': selected,
       'correct': isCorrect,
-      'boost_db': _extraBoostDb,
+      'boost_db': presentedBoost,
     });
 
     setState(() => _currentTrial++);
@@ -160,21 +179,16 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
       metadata: {
         'log': _sessionLog,
         'final_boost_db': _extraBoostDb,
-        'critical_phoneme_band': _currentPhoneme?['freq_band'],
+        'stimulus_bank_version': 2,
       },
     );
 
-    // Atualiza gamificação com desempenho da sessão
-    final phonemeTypes = _sessionLog
-        .map((e) => e['type'] as String? ?? '')
-        .where((t) => t.isNotEmpty)
-        .toList();
-    _gamification.addAcuityXP(session.accuracy / 100.0, phonemeTypes);
+    final contrasts = _sessionLog.map((e) => e['contrast'] as String).toList();
+    _gamification.addAcuityXP(session.accuracy / 100.0, contrasts);
     _gamification.incrementSessionsToday();
 
     try {
       await _supabase.saveRehabSession(session);
-      // Persiste estado de gamificação para carregar na próxima sessão
       final user = Supabase.instance.client.auth.currentUser;
       if (user != null) {
         await _supabase.saveGamificationData(_gamification.toMapForSupabase());
@@ -190,26 +204,12 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
 
   @override
   Widget build(BuildContext context) {
+    final options = _trial?.options ?? const <String>[];
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D0F),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        title: const Text("NÍVEL 2: DISCRIMINAÇÃO FONÊMICA"),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Center(
-              child: Text(
-                "BOOST: ${_extraBoostDb.toStringAsFixed(0)} dB",
-                style: TextStyle(
-                  color: _extraBoostDb > 9 ? Colors.orange : Colors.greenAccent,
-                  fontSize: 10,
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ),
-          ),
-        ],
+        title: const Text("Palavras parecidas", style: TextStyle(fontSize: 18)),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(4),
           child: LinearProgressIndicator(
@@ -219,43 +219,46 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
           ),
         ),
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              "Trial ${_currentTrial + 1} / $_maxTrials",
-              style: const TextStyle(color: Colors.white38, fontSize: 12, fontFamily: 'monospace'),
-            ),
-            const SizedBox(height: 24),
-            const PulseIcon(),
-            const SizedBox(height: 48),
-            const Text(
-              "Qual palavra você ouviu?",
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Colors.white70),
-            ),
-            const SizedBox(height: 64),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 400),
-              child: Row(
-                key: ValueKey(_currentTrial),
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: _options.map((opt) => Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: AnimatedOptionCard(label: opt, onTap: () => _handleResponse(opt)),
-                )).toList(),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Center(
+          child: Column(
+            children: [
+              Text(
+                "Palavra ${(_currentTrial + 1).clamp(1, _maxTrials)} de $_maxTrials",
+                style: const TextStyle(color: Colors.white70, fontSize: 16),
               ),
-            ),
-            const SizedBox(height: 80),
-            IconButton(
-              icon: const Icon(Icons.refresh, color: Colors.grey, size: 32),
-              onPressed: _isPlaying ? null : _playTarget,
-              tooltip: "Repetir estímulo",
-            ),
-          ],
+              const SizedBox(height: 24),
+              const PulseIcon(),
+              const SizedBox(height: 40),
+              const Text(
+                "Qual palavra você ouviu?",
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Colors.white),
+              ),
+              const SizedBox(height: 48),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 400),
+                child: Wrap(
+                  key: ValueKey(_currentTrial),
+                  alignment: WrapAlignment.center,
+                  spacing: 24,
+                  runSpacing: 16,
+                  children: [
+                    for (final opt in options) AnimatedOptionCard(label: opt, onTap: () => _handleResponse(opt)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 48),
+              TextButton.icon(
+                onPressed: _isPlaying ? null : _playTarget,
+                icon: const Icon(Icons.refresh, size: 28),
+                label: const Text("Ouvir de novo", style: TextStyle(fontSize: 18)),
+                style: TextButton.styleFrom(foregroundColor: Colors.white70, minimumSize: const Size(48, 48)),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
-

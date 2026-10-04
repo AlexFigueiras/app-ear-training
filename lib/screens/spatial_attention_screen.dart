@@ -7,6 +7,7 @@ import '../core/gamification_controller.dart';
 import '../models/audiogram.dart';
 import '../models/rehab_session.dart';
 import '../services/audio_service_manager.dart';
+import '../training/item_selector.dart';
 import 'hearing_test/hearing_test_flow.dart';
 import '../services/supabase_service.dart';
 
@@ -22,6 +23,7 @@ class SpatialAttentionScreen extends StatefulWidget {
 
 class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
   late Audiogram _audiogram;
+  late ItemSelector _selector;
   final AudioRehabEngine _engine = AudioRehabEngine();
   final SupabaseService _supabase = SupabaseService();
   final GamificationController _gamification = GamificationController();
@@ -36,15 +38,11 @@ class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
   bool _canRespond = false;
   bool _isPlaying = false;
 
-  List<Map<String, dynamic>> get _audiogramData => [
-    ..._audiogram.leftEar.map((p) => {'frequency': p.frequency, 'threshold': p.threshold}),
-    ..._audiogram.rightEar.map((p) => {'frequency': p.frequency, 'threshold': p.threshold}),
-  ];
-
   @override
   void initState() {
     super.initState();
     _audiogram = widget.audiogram;
+    _selector = ItemSelector(audiogram: _audiogram, warmUpTrials: 0);
     _gamification.resetEnergyForNewSession();
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
   }
@@ -70,10 +68,10 @@ class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
   }
 
   Future<void> _playSpatialSound() async {
-    // Usa fonema priorizado pela zona de perda do paciente
-    final phoneme = _gamification.getSmartPhoneme(_audiogramData);
-    final text = phoneme?['target'] as String? ?? 'Saco';
-    final freqBand = (phoneme?['freq_band'] as num?)?.toDouble() ?? 5000.0;
+    // Palavra do banco novo (provisório: o redesenho do módulo vem na Etapa 9 do plano).
+    final trial = _selector.next();
+    final text = trial.played;
+    final freqBand = trial.pair.contrast.cueBandHz.toDouble();
 
     double pan = 0.0;
     if (_targetDirection == SpatialDirection.left) pan = -1.0;
@@ -86,7 +84,7 @@ class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
     });
     try {
       final duration =
-          await _engine.playSpatialStimulus(text: text, panning: pan, freqBand: freqBand);
+          await _engine.playSpatialStimulus(text: text, voice: trial.voice, panning: pan, freqBand: freqBand);
       await Future.delayed(duration); // resposta só depois que a palavra termina
       if (!mounted) return;
       setState(() {
@@ -198,7 +196,7 @@ class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            "Trial ${_currentTrial + 1} / $_maxTrials",
+            "Palavra ${(_currentTrial + 1).clamp(1, _maxTrials)} de $_maxTrials",
             style: const TextStyle(color: Colors.white38, fontSize: 11, fontFamily: 'monospace'),
           ),
           const SizedBox(height: 48),

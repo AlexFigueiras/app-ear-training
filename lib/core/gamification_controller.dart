@@ -1,6 +1,4 @@
-import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
-import 'phoneme_map.dart';
 
 /// Controlador Central de Gamificação Clínica [ORQUESTRADOR]
 /// Gerencia XP, Energia Neural e Nível de Acuidade de forma reativa.
@@ -31,25 +29,6 @@ class GamificationController extends ChangeNotifier {
   bool get recommendRest => _sessionsCompletedToday >= 2;
   double get currentSNR => _currentSNR;
   double get maxNoiseThreshold => _maxNoiseThreshold;
-
-  /// Seleção Inteligente baseada no Audiograma [Fase 1]
-  Map<String, dynamic>? getSmartPhoneme(List<dynamic> audiogramData) {
-    final List<Map<String, dynamic>> level2Stimuli = List<Map<String, dynamic>>.from(phonemeRehabData['level_2']);
-
-    // Filtra frequências com perda > 25dB
-    final criticalFreqs = audiogramData.where((p) => (p['threshold'] as num) > 25).map((p) => p['frequency'] as int).toList();
-    
-    if (criticalFreqs.isEmpty) return level2Stimuli[math.Random().nextInt(level2Stimuli.length)];
-
-    // Filtra fonemas na faixa de +/- 1500Hz das frequências críticas
-    final smartMatch = level2Stimuli.where((s) {
-      final band = s['freq_band'] as int;
-      return criticalFreqs.any((f) => (band - f).abs() <= 1500);
-    }).toList();
-
-    if (smartMatch.isEmpty) return level2Stimuli[math.Random().nextInt(level2Stimuli.length)];
-    return smartMatch[math.Random().nextInt(smartMatch.length)];
-  }
 
   /// Adiciona XP baseado na performance e tipo de fonema [ANALYTICS]
   void addAcuityXP(double successRate, List<String> phonemes) {

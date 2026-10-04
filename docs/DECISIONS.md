@@ -1,6 +1,51 @@
 # DECISIONS — histórico vivo de decisões
 > Entradas no topo (mais recente primeiro). Estado do que existe fica em `docs/STATUS.md`.
 
+## [2026-10-04] Plano "treino eficaz" — Etapa 5 (banco de estímulos que obriga a ouvir)
+- **Status:** accepted (aguardando CI + checklist no celular)
+- **Contexto (achado D1 da auditoria de UX + análise do treino):**
+  - Só o "alvo" tocava e cada par tinha sempre a mesma resposta: dava para decorar.
+  - ~14 distratores eram pseudopalavras (Felo, Fopa, Tedo…): dava para acertar escolhendo a
+    palavra que existe.
+  - ~21 de 39 pares eram de vozeamento/nasalidade (pistas graves, preservadas na perda em
+    agudos).
+  - 70 placeholders ("Palavra1 × Falsa1") já tinham saído na Etapa 1.
+- **Decisões:**
+  - **Banco novo** (`lib/training/stimulus_bank.dart`): 49 pares de palavras REAIS por contraste
+    de ponto de articulação, com a faixa da pista.
+    - s×ch (~4 kHz), s×f (~6 kHz), t×p (~4 kHz), t×k (~3 kHz).
+    - /s/ final, singular×plural (~6 kHz).
+    - 5 pares de aquecimento graves (faca×vaca…), rotulados como tal.
+    - `phoneme_map.dart` e `GamificationController.getSmartPhoneme` foram removidos.
+  - **Seleção** (`lib/training/item_selector.dart`):
+    - qualquer palavra do par toca (50/50) e as opções são embaralhadas;
+    - 2 itens de aquecimento no início da Fonêmica, nenhum no Coquetel e no Espacial;
+    - peso por perda na faixa da pista (até 3×) × erros recentes (até 4×);
+    - sem repetir os últimos 4 pares.
+  - **Guarda de audibilidade:** contraste cuja pista está numa faixa em que a melhor orelha
+    tem limiar ≥ 70 (relativo) sai do sorteio. Se nenhum agudo é audível, a Fonêmica avisa e
+    orienta a procurar fonoaudiólogo/aparelho, e usa só o aquecimento.
+  - **Vozes:** 3 vozes pt-BR (Wavenet A, B, C), sorteadas por tentativa. Se uma voz falhar, o
+    motor cai na padrão. A palavra da próxima tentativa é baixada enquanto a pessoa responde.
+  - Coquetel e Espacial usam o mesmo banco.
+  - **Fonêmica:** título "Palavras parecidas", "Palavra x de y", "Ouvir de novo"; sem o número de
+    "BOOST" na tela (parte do D5).
+  - **Log por tentativa:** par, contraste, faixa da pista, palavra tocada, voz, resposta e
+    reforço apresentado.
+- **Verificação:** `test/item_selector_test.dart` (6 testes):
+  - só palavras reais;
+  - ~50/50 em 2000 sorteios;
+  - sem repetição;
+  - aquecimento só no início;
+  - pesos por perda e erro;
+  - guarda de audibilidade.
+
+  Rodou localmente com `dart` e o substituto de `flutter_test`; `flutter analyze` limpo.
+- **Pendente:**
+  - revisão do banco por fonoaudiólogo (frequência de uso, pronúncia do TTS, regionalismo do
+    /s/ final, que no Rio soa [ʃ]);
+  - confirmar no celular que as vozes B e C existem na conta do Google TTS (há fallback para A).
+
 ## [2026-10-04] Home e oferta do PRO revisadas pela auditoria de UX (F1 e E2)
 - **Status:** accepted
 - **Contexto:** o usuário dividiu os achados da auditoria de UX: os cobertos pelo plano "treino
