@@ -1,4 +1,4 @@
-package com.example.ear_training
+package com.bosyn.app
 
 import io.flutter.embedding.android.FlutterActivity
 

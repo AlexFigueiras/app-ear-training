@@ -3,7 +3,8 @@
 > Estado por feature. Histórico do *porquê* fica em `docs/DECISIONS.md`; visão do produto, em
 > `#PROJECT_BRAIN.md` e `docs/MASTER_PLAN.md`; skills/contexto locais, em `.agent/skills/`.
 > Legenda: ✅ pronto/funcionando · 🟡 parcial ou não auditado a fundo · ⬜ a fazer · 🚫 fora de escopo
-> Última auditoria: 2026-07-18 (brownfield — auditado a partir do código, backfillado)
+> Última auditoria: 2026-10-04 (prontidão para Google Play + revisão de segurança — ver
+> `docs/PLAY_STORE.md` e `docs/SECURITY_REVIEW.md`); auditoria inicial brownfield em 2026-07-18
 >
 > **Nota de auditoria:** as linhas abaixo confirmam apenas que o arquivo/feature **existe no
 > código**. Comportamento clínico, correção de DSP e cobertura de teste não foram verificados
@@ -15,11 +16,20 @@
 |---|---|---|---|
 | Fundação Dev OS (governança adaptada) | ✅ | `AGENTS.md`, `MASTER-PLAN.md`, `tool/`, `.githooks/`, `docs/` | Ver `bootstrap/PLANO-VIABILIDADE-E-ADOCAO.md` para o que foi reduzido/adiado |
 
+## Publicação Google Play
+| Feature / fluxo | Estado | Onde (código) | Notas / decisão |
+|---|---|---|---|
+| Configuração de release Android (pacote, assinatura, targetSdk 36, 16 KB, backup, rede, permissões mínimas) | 🟡 | `android/app/build.gradle.kts`, `android/app/src/main/AndroidManifest.xml`, `android/app/src/main/res/xml/`, `cpp/CMakeLists.txt` | Código pronto; build Android não verificado localmente (sem Android SDK) — prova fica no job `release-check` do CI. Falta keystore de upload (ação humana) |
+| Checklist da Play (formulários, Data safety, contas, prazos) | 🟡 | `docs/PLAY_STORE.md` | Bloqueadores humanos: rotação de chaves, deploy das Edge Functions, migration 003, `[PREENCHER]` nos textos legais, conta de organização, revisão regulatória |
+| Trava automática de regressão de release | ✅ | `tool/checks/check_release_config.dart`, `tool/check_elf_alignment.dart`, job `release-check` | Testada nos dois sentidos (passa no estado atual, falha contra a config antiga) |
+
 ## Produto — telas e fluxos
 | Feature / fluxo | Estado | Onde (código) | Notas / decisão |
 |---|---|---|---|
-| Autenticação | 🟡 | `lib/ui/screens/auth_screen.dart`, `lib/services/supabase_service.dart` | Existe; RLS/isolamento por `user_id` não auditado neste bootstrap |
-| Onboarding | 🟡 | `lib/ui/screens/onboarding_screen.dart` | Existe |
+| Autenticação | 🟡 | `lib/ui/screens/auth_screen.dart`, `auth_widgets.dart`, `password_reset_screen.dart`, `lib/core/auth_messages.dart`, `lib/ui/screens/session_gate.dart`, `lib/services/supabase_service.dart` | Raiz reage à sessão (login/logout/exclusão). Cadastro com consentimento LGPD para dado de saúde. Etapa A da auditoria de UX (2026-10-04): erros em pt-BR junto do campo, campos com nome acessível e autofill, mostrar senha, reenvio da confirmação de e-mail, "Esqueci minha senha" por código de 6 dígitos — verificado em `test/auth_*_test.dart` e de ponta a ponta com Supabase simulado. **Recuperação depende de `{{ .Token }}` no modelo de e-mail "Reset Password"** (ação humana, `docs/PLAY_STORE.md` item 4). RLS canônica em `supabase_migration_003_security.sql` (**não aplicada** — ação humana) |
+| Conta e privacidade (sair, excluir conta, política no app) | 🟡 | `lib/ui/screens/account_screen.dart`, `lib/services/account_service.dart`, `lib/ui/screens/legal_document_screen.dart`, `docs/legal/`, `supabase/functions/delete-account/` | Código pronto; exclusão depende de publicar a Edge Function e aplicar a migration 003. Textos legais com `[PREENCHER]` |
+| Configuração de build e fail-fast no boot | ✅ | `lib/core/app_config.dart`, `lib/ui/screens/startup_error_screen.dart`, `lib/main.dart` | `--dart-define-from-file=.env`; recusa chave que não seja publishable/anon. Coberto por `test/app_config_test.dart` |
+| Onboarding | 🟡 | `lib/ui/screens/onboarding_screen.dart` | Existe; agora abre com o aviso de saúde |
 | Calibração de áudio | 🟡 | `lib/ui/screens/calibration_screen.dart` | Existe; é âncora clínica de todos os níveis (`docs/MASTER_PLAN.md` §4.3) |
 | Home / dashboard de treino | 🟡 | `lib/ui/screens/home_screen.dart`, `lib/ui/screens/training_dashboard.dart` | Existe **duplicidade estrutural**: há uma segunda árvore de telas em `lib/screens/` paralela a `lib/ui/screens/` — não resolvida neste bootstrap (decisão que toca `lib/`, fora de escopo, ver `docs/ARCHITECTURE.md`) |
 | Teste de limiar tonal (Threshold Test) | 🟡 | `lib/screens/threshold_test_screen.dart` | Existe |
@@ -30,25 +40,26 @@
 | Relatório clínico / missão | 🟡 | `lib/ui/screens/mission_report_screen.dart`, `lib/services/pdf_service.dart` | Existe |
 | Dashboards técnicos/performance | 🟡 | `lib/screens/widgets/performance_dashboard.dart`, `technical_dashboard.dart`, `rehab_trends_chart.dart` | Existe |
 | Engine de áudio nativo (DSP/FFI) | 🟡 | `lib/audio_engine/audio_engine.dart`, `lib/audio_engine/native_engine.dart`, `cpp/` | Crítico (latência clínica); sem teste automatizado conhecido |
-| Telemetria / persistência Supabase | 🟡 | `lib/services/supabase_service.dart`, `lib/services/event_buffer.dart`, `lib/models/rehab_session.dart` | Existe; políticas RLS reais não auditadas (schema fora do repo) |
-| TTS (text-to-speech) | 🟡 | `lib/services/tts_service.dart` | Existe; depende de `GOOGLE_TTS_API_KEY` (ver incidente de segredo abaixo) |
-| Gatekeeper / paywall (Stripe) | 🟡 | `lib/services/gatekeeper_service.dart`, dep. `flutter_stripe` | Existe |
+| Telemetria / persistência Supabase | 🟡 | `lib/services/supabase_service.dart`, `lib/services/event_buffer.dart`, `lib/models/rehab_session.dart` | Arquivo offline pendente agora tem dono (não sobe na conta de outro usuário) e é apagado no logout/exclusão |
+| TTS (text-to-speech) | 🟡 | `lib/services/tts_service.dart`, `supabase/functions/tts/` | Via Edge Function autenticada; a chave do Google saiu do app. **Sem a função publicada não há áudio nos treinos** |
+| Gatekeeper / paywall | 🟡 | `lib/services/gatekeeper_service.dart`, `lib/ui/screens/home_screen.dart` | Só lê o plano; plano escrito apenas pelo servidor (migration 003). Checkout falso e `flutter_stripe` removidos; PRO "em breve" até integrar Google Play Billing (decisão pendente, ver `docs/PLAY_STORE.md` §5) |
 | Modelos de domínio | 🟡 | `lib/models/audiogram.dart`, `phonemic_pair.dart`, `rehab_session.dart` | Existe |
 
 ## Débitos e riscos conhecidos (não corrigidos neste bootstrap, por estarem fora do escopo "não tocar em lib/código")
 | Item | Estado | Notas |
 |---|---|---|
-| `.env` commitado com segredos reais | 🟡 | Untracked do git e adicionado ao `.gitignore` neste bootstrap. **Rotação das chaves (Supabase, Google TTS) e limpeza do histórico do git seguem pendentes — ação humana necessária.** |
+| `.env` commitado com segredos reais | ⬜ | **Repositório é público** (verificado em 2026-10-04). O app não usa mais a chave do Google TTS e o `.env` não é mais empacotado, mas as chaves antigas seguem válidas no histórico. **Rotação pendente — ação humana urgente** (passo a passo em `docs/SECURITY_REVIEW.md`, C1) |
+| Branches remotos `claude/*` não mesclados | ⬜ | `origin/claude/app-theme-layout-bugs-NShoJ` (25 commits à frente), `unify-friendly-ui` (22), `determined-clarke-GSF85` (12, inclui `supabase/schema.sql` com `profiles` e trigger de cadastro). São de jun/2026, anteriores ao `main` atual; mesclá-los vai conflitar com home/auth/pubspec/schema. Decidir: mesclar, aproveitar partes ou arquivar |
 | Duplicidade `lib/screens/` vs `lib/ui/screens/` | ⬜ | Sintoma de refatoração incompleta; não resolvida — decisão que toca `lib/`, fora do escopo deste bootstrap |
-| Validação de env em boot (fail-fast) | ⬜ | Módulo 04 do kit original; exige tocar `lib/main.dart` — follow-up, não executado |
-| Logger estruturado (substituir `print`/`debugPrint`) | ⬜ | 29 ocorrências em `lib/` na auditoria de 2026-07-18; módulo 05 reduzido, follow-up |
-| Cobertura de testes automatizados | ⬜ | Apenas `test/widget_test.dart` existe; sem suíte real para ~5.000 linhas de `lib/` |
+| Código morto alcançável só por si mesmo | ⬜ | `lib/ui/screens/training_dashboard.dart` → `mission_report_screen.dart` → `services/pdf_service.dart` (deps `pdf`/`printing`) e `lib/models/phonemic_pair.dart` não são importados por nada a partir de `main.dart` |
+| Logger estruturado (substituir `print`/`debugPrint`) | 🟡 | Todos os `print` viraram `debugPrint`, desligado em release (`lib/main.dart`). Logger estruturado de verdade segue como follow-up (módulo 05) |
+| Cobertura de testes automatizados | 🟡 | Suíte inicial: `test/app_config_test.dart`, `legal_documents_test.dart`, `gamification_controller_test.dart`, `check_elf_alignment_test.dart`, `widget_test.dart`. Telas de treino, engine e serviços seguem sem teste |
 | Arquivos soltos na raiz (`analysis.txt`, `build_log.txt`, `debug_env.log`, `write_test.txt`) | ⬜ | Lixo de debug versionado; não removido neste bootstrap (decisão do usuário, não higiene automática) |
 | Plataforma iOS ausente | 🚫 | Só `android/`, `web/`, `windows/` existem; fora de escopo deste bootstrap (decisão de stack/plataforma, não de governança) |
 | `skills-library/CATALOG.md` | 🟡 | Catálogo genérico de ~1.262 skills de mercado, **não curado para este projeto** (confirmado por leitura: contém skills de Angular, Godot, Elixir etc., sem relação com Flutter/audiologia). Distinto de `.agent/skills/`, que É específico deste projeto. Ver `docs/DECISIONS.md`. |
-| **2 erros reais em `flutter analyze`** (pré-existentes, não introduzidos por este bootstrap) | ⬜ | `error - The getter 'remainingRestTime' isn't defined for the type 'GamificationController' - lib/ui/screens/training_dashboard.dart:487` · `error - The name 'MyApp' isn't a class - test/widget_test.dart:16` (a única suíte de teste do projeto não compila). Descobertos ao endurecer o CI (módulo 11) — `flutter analyze` já falhava antes deste bootstrap independentemente das flags `--no-fatal-*`, porque erros (diferente de warnings/infos) sempre são fatais. Não corrigidos aqui (toca `lib/`/`test/`, fora de escopo). |
+| `flutter analyze` ainda falha no CI por infos/warnings pré-existentes | 🟡 | Os 2 erros reais foram corrigidos em 2026-10-04 (`training_dashboard.dart` usava getter removido; `widget_test.dart` usava `MyApp` inexistente). Restam ~43 infos/warnings de código não tocado (maioria `withOpacity` deprecado, `AudioDeviceType` experimental, `shared_preferences`/`ffi` usados sem declarar no pubspec — declarar exige aprovação, AGENTS.md §2.4). `flutter analyze` trata infos como fatais por padrão |
 | `dart format` — 29 dos 33 arquivos `.dart` de `lib/` não estão formatados no padrão `dart format` | ⬜ | Descoberto ao tentar endurecer o step "Verify formatting" do CI. Reformatar é whitespace-only, mas toca todo `lib/` — mantido como `continue-on-error: true` no CI por decisão explícita (ver `.github/workflows/ci.yml` e `docs/DECISIONS.md`), não corrigido neste bootstrap. |
-| `flutter test` / `dart run` não executam localmente nesta máquina | 🟡 | Falta toolchain de compilador C (Visual Studio Build Tools/MSVC) para o build de native assets do pacote `win32` (dependência transitiva). Não é causado por este bootstrap; não deve reproduzir no CI (`ubuntu-latest` tem `gcc`/`build-essential` por padrão). `tool/verify_rules.dart` foi validado com sucesso via `dart run` várias vezes **antes** desta limitação aparecer (ver histórico de testes negativos dos módulos 06/10 em `docs/DECISIONS.md`). |
+| `flutter test` não executa localmente nesta máquina | 🟡 | Falta toolchain de compilador C (Visual Studio Build Tools/MSVC) para o build de native assets do pacote `win32` (dependência transitiva de `device_info_plus`); desligar native assets não resolve (`win32` os exige). Não deve reproduzir no CI (`ubuntu-latest` tem `gcc`). `dart tool/verify_rules.dart` roda normalmente (reverificado em 2026-10-04). Esta máquina também não tem Android SDK: build Android só no CI |
 
 ## Regras de uso (deste STATUS)
 - **Brownfield:** a auditoria acima confirma existência no código, não corretude. `✅` só para o

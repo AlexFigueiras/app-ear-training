@@ -17,10 +17,14 @@ engine de áudio nativo (C++/Oboe via FFI) para DSP em baixa latência.
 git clone <url-do-repo>
 cd app-ear-training
 flutter pub get
-cp .env.example .env      # preencha SUPABASE_URL, SUPABASE_ANON_KEY, GOOGLE_TTS_API_KEY
+cp .env.example .env      # preencha SUPABASE_URL e SUPABASE_PUBLISHABLE_KEY (só valores públicos)
 git config core.hooksPath .githooks   # ativa os git hooks versionados (ver nota abaixo)
-flutter run
+flutter run --dart-define-from-file=.env
 ```
+
+A configuração entra em tempo de build (`--dart-define-from-file`); o `.env` não é mais
+empacotado no app. No VS Code, as configurações de `.vscode/launch.json` já passam o arquivo.
+Sem configuração válida o app abre numa tela de erro explícita (fail-fast).
 
 **Nota sobre os git hooks:** diferente de projetos Node (`npm install` ativa hooks
 automaticamente via `prepare`), `pub` não tem um mecanismo de lifecycle script equivalente. Rode
@@ -31,20 +35,26 @@ checks de qualquer forma).
 ## Comandos principais
 
 ```bash
-flutter run                                                       # dev
+flutter run --dart-define-from-file=.env                          # dev
 flutter analyze                                                    # lint/análise estática
 dart format --output=none --set-exit-if-changed lib test tool      # checar formatação
 flutter test                                                        # testes
 flutter test --coverage                                             # testes com cobertura
-dart tool/verify_rules.dart                                     # verify-rules (tamanho de arquivo, secrets)
+dart tool/verify_rules.dart                                     # verify-rules (tamanho, secrets, config de release)
 ```
+
+Publicação na Google Play (assinatura, AAB, formulários do Play Console): ver
+[`docs/PLAY_STORE.md`](docs/PLAY_STORE.md). Revisão de segurança: [`docs/SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md).
 
 Não há comando `generate` (scaffolding automático) neste projeto — ver `AGENTS.md` seção 2.
 
 ## Backend
 
 Não há banco/servidor local para subir. O backend é o Supabase, gerenciado externamente; o app
-fala com ele via `supabase_flutter` usando `SUPABASE_URL`/`SUPABASE_ANON_KEY` do `.env`.
+fala com ele via `supabase_flutter` usando `SUPABASE_URL`/`SUPABASE_PUBLISHABLE_KEY` do `.env`.
+O que exige segredo roda em Edge Functions versionadas em [`supabase/functions/`](supabase/functions/)
+(`tts`: proxy do Google Text-to-Speech; `delete-account`: exclusão de conta). Mudanças de schema
+ficam nos `supabase_migration_*.sql` da raiz, aplicados à mão no SQL Editor.
 
 ## Estrutura e governança
 

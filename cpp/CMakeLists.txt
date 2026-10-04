@@ -30,6 +30,14 @@ else()
     target_compile_options(dsp_audio_engine PRIVATE -O3)
 endif()
 
+# Google Play exige .so com segmentos ELF alinhados a 16 KB (Android 15+). O NDK r28+ já faz
+# isso por padrão; o flag explícito mantém a garantia se o build cair num NDK mais antigo.
+if(ANDROID)
+    target_link_options(dsp_audio_engine PRIVATE
+        "-Wl,-z,max-page-size=16384"
+        "-Wl,-z,common-page-size=16384")
+endif()
+
 # Pesquisa pela biblioteca de log do Android
 find_library(log-lib log)
 

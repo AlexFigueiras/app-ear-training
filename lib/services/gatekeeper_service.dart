@@ -1,6 +1,11 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// GATEKEEPER SERVICE: Gestor de Acesso e Monetização [GATEKEEPER]
+///
+/// O app só LÊ o plano. Quem escreve `subscription_status` é o servidor (confirmação de
+/// compra validada lá); o banco ignora alterações vindas do cliente
+/// (supabase_migration_003_security.sql). Um "upgrade" feito pelo próprio app permitia a
+/// qualquer usuário liberar o PRO sem pagar — removido.
 class GatekeeperService {
   static final GatekeeperService _instance = GatekeeperService._internal();
   factory GatekeeperService() => _instance;
@@ -14,29 +19,16 @@ class GatekeeperService {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return false;
 
-    // Consulta Status de Assinatura no Perfil
+    // Consulta Status de Assinatura no Perfil (sem perfil = plano gratuito)
     final res = await Supabase.instance.client
         .from('profiles')
         .select('subscription_status')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-    final status = res['subscription_status'] as String? ?? 'free';
-    
+    final status = res?['subscription_status'] as String? ?? 'free';
+
     // Níveis 3 e 4 exigem status 'pro' ou 'elite'
     return status != 'free';
-  }
-
-  /// Atualiza o status de assinatura após pagamento bem-sucedido [MONETIZAÇÃO]
-  Future<void> upgradeToPro() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
-
-    await Supabase.instance.client
-        .from('profiles')
-        .update({'subscription_status': 'pro'})
-        .eq('user_id', user.id);
-    
-    print("UPGRADE REALIZADO: Status Pro Ativo para ${user.id}");
   }
 }

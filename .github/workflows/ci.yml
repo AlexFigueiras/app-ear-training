@@ -29,18 +29,8 @@ jobs:
         with:
           channel: stable
 
-      # O app espera um .env (carregado via flutter_dotenv como asset).
-      # Em CI usamos valores fictícios — segredos reais nunca entram no repo.
-      - name: Create dummy .env
-        run: |
-          cat > .env <<'EOF'
-          SUPABASE_URL=https://example.supabase.co
-          SUPABASE_ANON_KEY=dummy
-          GOOGLE_TTS_API_KEY=dummy
-          EOF
-          mkdir -p assets/audio
-          touch assets/audio/.gitkeep
-
+      # Análise e testes não precisam de configuração: ela entra só no build, via
+      # --dart-define-from-file (não há mais .env empacotado como asset).
       - name: Install dependencies
         run: flutter pub get
 
@@ -92,24 +82,21 @@ jobs:
         with:
           channel: stable
 
-      # O app espera um .env (carregado via flutter_dotenv como asset).
-      # ATENÇÃO: estes valores são fictícios. Para o app conectar de verdade
-      # ao Supabase, você precisa buildar com suas chaves reais (ver abaixo).
+      # Só valores públicos (URL + chave publishable). A chave do Google TTS NÃO vem mais para o
+      # app — mora nos secrets da Edge Function `tts` (supabase/functions/tts).
+      # Sem os secrets configurados o APK abre na tela de "configuração inválida" (fail-fast).
       - name: Create .env
         run: |
           cat > .env <<EOF
           SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
-          GOOGLE_TTS_API_KEY=${{ secrets.GOOGLE_TTS_API_KEY }}
+          SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY || secrets.SUPABASE_ANON_KEY }}
           EOF
-          mkdir -p assets/audio
-          touch assets/audio/.gitkeep
 
       - name: Install dependencies
         run: flutter pub get
 
       - name: Build debug APK
-        run: flutter build apk --debug
+        run: flutter build apk --debug --dart-define-from-file=.env
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -117,3 +104,47 @@ jobs:
           name: bosyn-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 14
+
+  # Build de RELEASE descartável: prova que R8/minify, CMake/NDK e assinatura de fallback
+  # funcionam, e trava o requisito de páginas de 16 KB da Google Play (apps com código nativo).
+  # Este APK nunca é distribuído — o AAB da Play é gerado localmente com a chave de upload
+  # (docs/PLAY_STORE.md). Sem android/key.properties o Gradle cai na chave debug aqui, de propósito.
+  release-check:
+    name: Release build (R8 + 16 KB)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Create .env (valores fictícios — só para compilar)
+        run: |
+          cat > .env <<'EOF'
+          SUPABASE_URL=https://example.supabase.co
+          SUPABASE_PUBLISHABLE_KEY=sb_publishable_ci_dummy
+          EOF
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build release APK (obfuscado)
+        run: >
+          flutter build apk --release
+          --obfuscate --split-debug-info=build/debug-info
+          --dart-define-from-file=.env
+
+      - name: Verificar alinhamento de 16 KB (zip + ELF)
+        run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          BUILD_TOOLS="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)"
+          "${BUILD_TOOLS}zipalign" -c -P 16 4 "$APK"
+          mkdir -p build/apk-libs
+          unzip -q -o "$APK" 'lib/*' -d build/apk-libs
+          dart tool/check_elf_alignment.dart build/apk-libs/lib

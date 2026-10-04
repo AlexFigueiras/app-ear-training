@@ -7,19 +7,36 @@
 
 **"Deploy" aqui é publicar um app mobile, não subir um servidor.**
 
-- **Build de release:** `flutter build apk --release` (Android) ou `flutter build appbundle
-  --release` para a Play Store. `TBD`: processo de assinatura (keystore) e publicação na Play
-  Console — não documentado ainda.
+- **Build de release para a Play Store:**
+  ```bash
+  flutter build appbundle --release --obfuscate --split-debug-info=build/debug-info --dart-define-from-file=.env
+  ```
+  - O build exige `android/key.properties` com a chave de upload; o Gradle recusa o AAB sem
+    ela.
+  - Guarde `build/debug-info` de cada versão: é o que permite ler stack traces ofuscados.
+  - Passo a passo completo (keystore, Play Console, formulários): `docs/PLAY_STORE.md`.
 - **Build de debug via CI:** `.github/workflows/ci.yml`, job `build-apk`, roda a cada push em
-  `main`/`claude/**`, usa os secrets `SUPABASE_URL`/`SUPABASE_ANON_KEY`/`GOOGLE_TTS_API_KEY`
-  configurados no GitHub (Settings → Secrets), sobe o APK como artifact.
-- **Variáveis exigidas em runtime:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `GOOGLE_TTS_API_KEY`
-  (ver `.env.example`). Não há validação fail-fast dessas vars no boot ainda — módulo 04 em
-  `MASTER-PLAN.md`, adiado.
+  `main`/`claude/**`.
+  - Usa os secrets `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_KEY` (ou o antigo
+    `SUPABASE_ANON_KEY`) configurados no GitHub.
+  - Sobe o APK como artifact.
+- **Verificação de release via CI:** o job `release-check` gera um APK de release descartável e
+  falha se uma `.so` 64-bit não estiver alinhada a 16 KB.
+- **Variáveis de build:** `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_KEY` (ver `.env.example`).
+  - Entram por `--dart-define-from-file=.env`.
+  - O app valida no boot e mostra uma tela de erro se faltar algo ou se a chave não for
+    pública (`lib/core/app_config.dart`).
+- **Edge Functions** (`supabase/functions/`): `tts` (proxy do Google TTS) e `delete-account`
+  (exclusão de conta).
+  - Deploy: `supabase functions deploy <nome> --project-ref <ref>`.
+  - Secret da `tts`: `supabase secrets set GOOGLE_TTS_API_KEY=... --project-ref <ref>`.
+  - Logs: Supabase → Edge Functions → Logs.
 - **Schema/banco:** o schema do Supabase é gerido **fora deste repositório** (console do
-  Supabase). Os `.sql` na raiz (`supabase_migration_001.sql`, `supabase_migration_002.sql`,
-  `supabase_setup.sql`) são histórico de setup manual, não migrations aplicadas automaticamente
-  em deploy. `TBD`: processo formal de migration.
+  Supabase).
+  - Os `.sql` da raiz são aplicados à mão no SQL Editor, em ordem: `supabase_setup.sql`,
+    `001`, `002`, `003_security`.
+  - A `003_security` é obrigatória antes da publicação e é idempotente.
+  - `TBD`: processo formal de migration (ex.: `supabase/migrations/` + CLI).
 - **Plataformas com build configurado:** Android, Web, Windows (`android/`, `web/`, `windows/`).
   iOS/macOS/Linux não estão configurados neste repo.
 
@@ -57,6 +74,11 @@ Ocorrido antes deste bootstrap, parcialmente mitigado (ver `docs/DECISIONS.md`,
    (`git filter-repo` ou BFG) — operação destrutiva, decisão humana, nunca automática.
 5. Registrar o incidente em `docs/DECISIONS.md`.
 
-**Pendência real desta rodada:** os passos 1–2 foram feitos para `SUPABASE_URL`,
-`SUPABASE_ANON_KEY` e `GOOGLE_TTS_API_KEY`; os passos 3–4 (rotação e avaliação de histórico)
-seguem pendentes de ação humana.
+**Pendência real:** os passos 1–2 foram feitos para `SUPABASE_URL`, `SUPABASE_ANON_KEY` e
+`GOOGLE_TTS_API_KEY`. Os passos 3–4 (rotação e avaliação de histórico) seguem pendentes de ação
+humana.
+
+**Atualização 2026-10-04:** o repositório é **público**, então as chaves são de conhecimento
+público. O app não usa mais a chave do Google TTS (ela foi para a Edge Function `tts`), mas a
+chave antiga continua válida até ser apagada no Google Cloud. Roteiro de rotação:
+`docs/SECURITY_REVIEW.md`, item C1.

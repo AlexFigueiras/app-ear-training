@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:introduction_screen/introduction_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../audio_engine/audio_engine.dart';
+import '../../core/legal_documents.dart';
 import '../../models/audiogram.dart';
 import '../../screens/threshold_test_screen.dart';
 import '../../services/supabase_service.dart';
@@ -9,7 +10,10 @@ import 'home_screen.dart';
 
 /// SCREEN: Onboarding e Teste Auditivo Inicial [ORQUESTRADOR]
 class OnboardingScreen extends StatelessWidget {
-  const OnboardingScreen({super.key});
+  /// Chamado ao concluir (o SessionGate troca para a Home). Sem ele, navega direto para a Home.
+  final VoidCallback? onCompleted;
+
+  const OnboardingScreen({super.key, this.onCompleted});
 
   Future<void> _completeOnboarding(BuildContext context) async {
     final user = Supabase.instance.client.auth.currentUser;
@@ -41,7 +45,9 @@ class OnboardingScreen extends StatelessWidget {
         .update({'onboarding_completed': true})
         .eq('user_id', user.id);
 
-    if (context.mounted) {
+    if (onCompleted != null) {
+      onCompleted!();
+    } else if (context.mounted) {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
@@ -53,6 +59,12 @@ class OnboardingScreen extends StatelessWidget {
     return IntroductionScreen(
       globalBackgroundColor: const Color(0xFF0A0A0A),
       pages: [
+        // Aviso de saúde antes de qualquer teste (política Health Content da Google Play).
+        PageViewModel(
+          title: "ANTES DE COMEÇAR",
+          body: LegalDocuments.healthDisclaimer,
+          decoration: _pageDecoration(),
+        ),
         PageViewModel(
           title: "NEUROPLASTICIDADE",
           body: "O BOSYN utiliza o método de 'Minimal Pairs' para remapear como seu cérebro processa frequências agudas perdidas. 2 sessões por dia, 5 dias por semana, 6-8 semanas.",

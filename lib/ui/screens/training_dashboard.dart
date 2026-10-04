@@ -484,17 +484,18 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
   Widget _buildControlPanel() {
     final gamification = context.watch<GamificationController>();
     final canStart = gamification.hasEnergy;
-    final restRemaining = gamification.remainingRestTime;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // O bloqueio por tempo de repouso (remainingRestTime) saiu do GamificationController
+        // (commit 9064571, recomendação suave em vez de bloqueio duro).
         if (!canStart)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
+          const Padding(
+            padding: EdgeInsets.only(bottom: 10),
             child: Text(
-              "FADIGA NEURAL DETECTADA. REPOUSO: ${restRemaining.inHours}h ${restRemaining.inMinutes % 60}m",
-              style: const TextStyle(color: Color(0xFFE11D48), fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+              "FADIGA NEURAL DETECTADA. FAÇA UMA PAUSA ANTES DA PRÓXIMA SESSÃO.",
+              style: TextStyle(color: Color(0xFFE11D48), fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
             ),
           ),
         SizedBox(

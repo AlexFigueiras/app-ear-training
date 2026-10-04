@@ -41,8 +41,8 @@ event_transport:          "N/A — sem backend próprio no repo; sem event bus/w
 | 01 | Repo init (adaptado: sem package.json/tsconfig — pub + analysis_options.yaml) | ✅ | `.gitignore` cobre `.env`/`scratch/`; `.env.example` criado; `.editorconfig` criado; `.env` untracked (`git rm --cached`) |
 | 02 | Context Engine (AGENTS.md, STATUS, DECISIONS) | ✅ | `AGENTS.md`, `CLAUDE.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/adr/0001-bootstrap.md` criados |
 | 03 | Topologia (DDD + hexagonal) — **doc-only por decisão explícita** | 🟡 | `docs/ARCHITECTURE.md` documenta a topologia-alvo; nenhuma pasta física movida (ver Regras invioláveis abaixo) |
-| 04 | Validação de env (fail-fast) | 🟡 | Adiado — requer tocar código de app (`main.dart`/bootstrap); fica como item follow-up com aprovação explícita, fora deste bootstrap |
-| 05 | Observabilidade + padrão de erros — **reduzido** (sem OTel/health/métricas de servidor) | 🟡 | Adiado pelo mesmo motivo do 04 (substituir os 32 `print`/`debugPrint` por logger estruturado é código de app) |
+| 04 | Validação de env (fail-fast) | ✅ | 2026-10-04: `lib/core/app_config.dart` (`--dart-define-from-file`) + `StartupErrorApp` no boot; recusa chave não pública. `test/app_config_test.dart` |
+| 05 | Observabilidade + padrão de erros — **reduzido** (sem OTel/health/métricas de servidor) | 🟡 | 2026-10-04: `print` → `debugPrint`, desligado em release (dado clínico fora do logcat). Logger estruturado segue pendente |
 | 06 | verify-rules core (tamanho, secrets) — **adaptado para Dart puro** | ✅ | `dart run tool/verify_rules.dart` |
 | 07 | verify-rules arquitetura (boundaries, migrations, ciclos) | 🚫 | Migrations/RLS: N/A (`multi_tenant=false`, sem migrations locais). Boundaries/ciclos: adiado — não há topologia física (módulo 03) para verificar. check-status-doc absorvido no módulo 06 |
 | 08 | generate core (migration, action, seed) | 🚫 | N/A — sem server actions/migrations locais neste app cliente |

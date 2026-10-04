@@ -1,22 +1,22 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Mínimo privilégio (política de permissões da Play + LGPD art. 6º, III): o app não grava
+         áudio nem usa APIs de Bluetooth — a detecção de fones usa AudioManager.getDevices(), que
+         não exige permissão. RECORD_AUDIO/BLUETOOTH_* foram removidas. Ver docs/DECISIONS.md. -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
 
-    <uses-feature android:name="android.hardware.microphone" android:required="true" />
     <uses-feature android:name="android.hardware.audio.low_latency" android:required="false" />
     <uses-feature android:name="android.hardware.audio.pro" android:required="false" />
-    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
 
+    <!-- allowBackup=false + dataExtractionRules: sessão do Supabase e telemetria clínica pendente
+         não vão para backup em nuvem nem para transferência entre aparelhos. -->
     <application
-        android:label="ear_training"
+        android:label="BOSYN"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:networkSecurityConfig="@xml/network_security_config">
         <activity
             android:name=".MainActivity"
             android:exported="true"

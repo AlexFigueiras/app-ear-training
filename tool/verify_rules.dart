@@ -4,6 +4,7 @@
 import 'dart:io';
 
 import 'checks/check_file_size.dart';
+import 'checks/check_release_config.dart';
 import 'checks/check_result.dart';
 import 'checks/check_secrets.dart';
 
@@ -11,6 +12,7 @@ Future<void> main() async {
   final checkRunners = <String, Future<List<CheckResult>> Function()>{
     'check-file-size': checkFileSize,
     'check-secrets': checkSecrets,
+    'check-release-config': checkReleaseConfig,
   };
 
   final allResults = <CheckResult>[];

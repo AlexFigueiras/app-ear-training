@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'dart:io';
 import 'dart:ffi' as ffi;
 import 'package:ffi/ffi.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/audiogram.dart';
 import '../services/tts_service.dart';
 import 'package:flutter/foundation.dart';
@@ -18,16 +17,13 @@ class AudioRehabEngine {
   Audiogram? _currentAudiogram;
 
   final _nativeBridge = NativeDSPBridge();
-  late final GoogleTTSService _tts;
+  final GoogleTTSService _tts = GoogleTTSService();
 
   // Calibração: 0dB HL -> 0.0001 linear. 80dB HL -> 1.0 linear.
   static const double _kRefDb = 80.0;
   static const double _fs = 48000.0; // Sample Rate padrão do Engine
 
-  AudioRehabEngine._internal() {
-    final apiKey = dotenv.env['GOOGLE_TTS_API_KEY'] ?? '';
-    _tts = GoogleTTSService(apiKey);
-  }
+  AudioRehabEngine._internal();
 
   Future<void> restartHardwareAudio() async {
     _nativeBridge.stopHardwareAudio();
@@ -46,7 +42,7 @@ class AudioRehabEngine {
     // Passa frequências e Half-Gain para cada ponto do audiograma (média L+R)
     _applyAudiogramProfileToDsp(audiogram);
 
-    print("AudioRehabEngine Inicializado (Native Stereo DSP | Adaptive Clinical EQ)");
+    debugPrint("AudioRehabEngine Inicializado (Native Stereo DSP | Adaptive Clinical EQ)");
   }
 
   void _applyAudiogramProfileToDsp(Audiogram audiogram) {
@@ -122,7 +118,7 @@ class AudioRehabEngine {
     // 3. Carrega e executa no Native DSP com ganho clínico real
     _loadSampleToNative(samples, isTarget: true, volume: gainLinear);
 
-    print("ESTÍMULO N2: '$text' | Freq: $freqBand Hz | Gain EQ: +${clinicalGainDb.toStringAsFixed(1)} dB (${gainLinear.toStringAsFixed(2)}x)");
+    debugPrint("ESTÍMULO N2: '$text' | Freq: $freqBand Hz | Gain EQ: +${clinicalGainDb.toStringAsFixed(1)} dB (${gainLinear.toStringAsFixed(2)}x)");
   }
 
   /// NÍVEL 3: Atenção Espacial (Panning Binaural)
@@ -147,7 +143,7 @@ class AudioRehabEngine {
     // 3. Carrega no Mixer com ganho clínico real
     _loadSampleToNative(samples, isTarget: true, volume: gainLinear);
 
-    print("ESTÍMULO ESPACIAL: '$text' | Pan: $panning | EQ: +${gainDb.toStringAsFixed(1)} dB (${gainLinear.toStringAsFixed(2)}x)");
+    debugPrint("ESTÍMULO ESPACIAL: '$text' | Pan: $panning | EQ: +${gainDb.toStringAsFixed(1)} dB (${gainLinear.toStringAsFixed(2)}x)");
   }
 
 
@@ -170,7 +166,7 @@ class AudioRehabEngine {
     // 3. Carrega no motor nativo
     _loadSampleToNative(samples, isTarget: true);
     
-    print("CALIBRAÇÃO: Tom de $frequencyHz Hz emitido por $durationSeconds segundos.");
+    debugPrint("CALIBRAÇÃO: Tom de $frequencyHz Hz emitido por $durationSeconds segundos.");
   }
 
   /// NÍVEL 4: O Efeito Coquetel - SNR Balanceado [AMBIENTE HOSTIL]
@@ -198,7 +194,7 @@ class AudioRehabEngine {
     // 4. Carrega no motor nativo com ganho clínico real
     _loadSampleToNative(samples, isTarget: true, volume: gainLinear);
 
-    print("MISTURA COQUETEL: ENV=$noiseEnvironment | SNR=$snrDb dB | EQ: +${clinicalGainDb.toStringAsFixed(1)} dB");
+    debugPrint("MISTURA COQUETEL: ENV=$noiseEnvironment | SNR=$snrDb dB | EQ: +${clinicalGainDb.toStringAsFixed(1)} dB");
   }
 
   void _loadSampleToNative(Float32List samples, {bool isTarget = true, double volume = 1.0}) {
@@ -273,7 +269,7 @@ class AudioRehabEngine {
     // 3. Carrega no motor nativo
     _loadSampleToNative(samples, isTarget: true);
     
-    print("PURE TONE: $frequencyHz Hz | $dbLevel dB | Ear: $ear");
+    debugPrint("PURE TONE: $frequencyHz Hz | $dbLevel dB | Ear: $ear");
   }
 
   void _verifySecurityScope() {

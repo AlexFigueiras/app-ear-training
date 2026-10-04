@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/audio_service_manager.dart';
 import 'supabase_service.dart';
 
@@ -129,15 +130,24 @@ class SessionEventBuffer {
   Future<void> flush() async {
     if (_buffer.isEmpty || _currentSessionId == null) return;
 
+    // Sem usuário logado não há a quem atribuir o dado clínico: descarta.
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) {
+      _buffer.clear();
+      return;
+    }
+
     final batch = List<StimulusEvent>.from(_buffer);
     _buffer.clear();
-    
+
     final payload = batch.map((e) => e.toJson(_currentSessionId!)).toList();
-    
+
+    // O arquivo pendente registra o dono: telemetria de um usuário nunca sobe na conta de outro
+    // que entrar depois no mesmo aparelho.
     final filename = "pending_telemetry_${DateTime.now().millisecondsSinceEpoch}.json";
     final directory = await getApplicationDocumentsDirectory();
     final file = File('${directory.path}/$filename');
-    await file.writeAsString(jsonEncode(payload));
+    await file.writeAsString(jsonEncode({'user_id': userId, 'rows': payload}));
 
     try {
       await SupabaseService().saveStimulusResultsBatch(payload);
@@ -149,21 +159,44 @@ class SessionEventBuffer {
   }
 
   Future<void> syncOfflineTelemetry() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+
     try {
       // Verificação de Internet Lightweight
       final result = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 5));
       if (result.isEmpty || result[0].rawAddress.isEmpty) return;
 
-      final directory = await getApplicationDocumentsDirectory();
-      final files = directory.listSync().whereType<File>().where((f) => f.path.contains("pending_telemetry_"));
-      
-      for (var file in files) {
-        final content = await file.readAsString();
-        final List<dynamic> payload = jsonDecode(content);
-        await SupabaseService().saveStimulusResultsBatch(payload.cast<Map<String, dynamic>>());
+      for (final file in await _pendingFiles()) {
+        final decoded = jsonDecode(await file.readAsString());
+        // Formato antigo (lista sem dono) ou arquivo de outra conta: não sobe nesta sessão.
+        if (decoded is! Map || decoded['user_id'] != userId) continue;
+        final rows = (decoded['rows'] as List).cast<Map<String, dynamic>>();
+        await SupabaseService().saveStimulusResultsBatch(rows);
         await file.delete();
       }
     } catch (_) {}
+  }
+
+  /// Apaga do aparelho toda telemetria clínica pendente (logout / exclusão de conta).
+  Future<void> purgeLocalData() async {
+    _buffer.clear();
+    _currentSessionId = null;
+    _heartbeatTimer?.cancel();
+    for (final file in await _pendingFiles()) {
+      try {
+        await file.delete();
+      } catch (_) {}
+    }
+  }
+
+  Future<List<File>> _pendingFiles() async {
+    final directory = await getApplicationDocumentsDirectory();
+    return directory
+        .listSync()
+        .whereType<File>()
+        .where((f) => f.path.contains("pending_telemetry_"))
+        .toList();
   }
 
   void dispose() {

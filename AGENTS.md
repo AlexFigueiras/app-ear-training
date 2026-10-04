@@ -118,18 +118,21 @@ aprovação humana explícita e não faz parte deste bootstrap.
 1. **Isolamento por usuário:** toda tabela do Supabase que guarda dado de paciente/sessão tem RLS
    habilitada com policy baseada em `auth.uid() = user_id` (ou equivalente) — não em `tenant_id`,
    já que o app é single-tenant por instalação, mas multi-usuário no backend compartilhado.
-2. **Credenciais privilegiadas jamais neste repositório.** Este app é 100% código cliente — a
-   `SUPABASE_ANON_KEY` (pública, restrita por RLS) é a única aceitável aqui. Nenhuma
-   `service_role key` ou admin key do Supabase, nem chave de API server-side irrestrita, pode
-   aparecer em `lib/`, `.env`, ou qualquer commit.
+2. **Credenciais privilegiadas jamais neste repositório.** O app é código cliente — a chave
+   publishable do Supabase (`SUPABASE_PUBLISHABLE_KEY`, ou a `anon` legada; pública, restrita
+   por RLS) é a única aceitável nele, e `lib/core/app_config.dart` recusa iniciar com qualquer
+   outra. Segredos de servidor (ex.: chave do Google TTS, chave secreta do Supabase) vivem só
+   nos secrets das Edge Functions (`supabase/functions/`), nunca em `lib/`, `.env` ou commit.
 3. **`.env` jamais versionado; `.env.example` sempre versionado.** Ver módulo 01 em
    `MASTER-PLAN.md`. **Nota de incidente:** até este bootstrap, `.env` estava commitado com
    `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `GOOGLE_TTS_API_KEY` reais. Foi removido do índice do
    git e adicionado ao `.gitignore` — **rotação das chaves e eventual limpeza do histórico do git
-   NÃO foram feitas** (exigem ação humana fora deste bootstrap, ver `docs/DECISIONS.md`).
-4. **Validação de env em boot: pendente.** O kit original exige que o app falhe cedo se faltar
-   env var obrigatória (módulo 04). Isso exigiria tocar `lib/main.dart` — fica registrado como
-   item follow-up em `docs/STATUS.md`, não executado neste bootstrap.
+   NÃO foram feitas** (exigem ação humana, ver `docs/SECURITY_REVIEW.md` item C1). O repositório
+   é público (verificado em 2026-10-04): trate essas chaves como comprometidas. O `.env` não é
+   mais empacotado no app — entra em tempo de build via `--dart-define-from-file`.
+4. **Validação de env em boot:** `AppConfig.validate()` (`lib/core/app_config.dart`) roda no
+   início de `lib/main.dart`; configuração ausente ou chave não pública abre uma tela de erro
+   explícita em vez de o app quebrar adiante (módulo 04, ✅ desde 2026-10-04).
 5. **Secret scanning:** `tool/verify_rules.dart` (módulo 06) varre o código-fonte à procura de
    segredos hard-coded fora de `.env*`. Não há secret-scan de histórico de git configurado.
 
@@ -137,16 +140,19 @@ aprovação humana explícita e não faz parte deste bootstrap.
 
 ```bash
 flutter pub get                                            # instalar dependências
-flutter run                                                # rodar em dev
+flutter run --dart-define-from-file=.env                   # rodar em dev (config entra no build)
 flutter analyze                                             # lint/análise estática
 dart format --output=none --set-exit-if-changed lib test tool   # checar formatação
 flutter test                                                 # rodar testes
 flutter test --coverage                                      # rodar testes com cobertura
-dart tool/verify_rules.dart                               # verify-rules (módulo 06)
+dart tool/verify_rules.dart                               # verify-rules (módulo 06 + config de release)
+flutter build appbundle --release --obfuscate --split-debug-info=build/debug-info --dart-define-from-file=.env  # AAB da Play (exige android/key.properties)
 ```
 
 Não há comando `generate` (ver seção 2, item 2). Não há comando `dev server` de backend — o
-único "backend" é o Supabase gerenciado externamente.
+único "backend" é o Supabase gerenciado externamente, mais as Edge Functions versionadas em
+`supabase/functions/` (deploy com a Supabase CLI, ver `docs/RUNBOOK.md`). Publicação na loja:
+`docs/PLAY_STORE.md`.
 
 ## 9. Stack Adapter
 
@@ -158,7 +164,7 @@ Não há comando `generate` (ver seção 2, item 2). Não há comando `dev serve
 | `scripts/generate.js` | Não construído neste bootstrap (N/A, ver seção 2) |
 | `domains/<x>/` (DDD físico) | `lib/features/<x>/` — **documentado em `docs/ARCHITECTURE.md`, não migrado** |
 | Migrations SQL + RLS por `tenant_id` | Schema gerido fora do repo no Supabase; RLS por `user_id` (seção 7) |
-| Server actions | N/A — chamadas diretas ao SDK `supabase_flutter` em `lib/services/` |
+| Server actions | Chamadas diretas ao SDK `supabase_flutter` em `lib/services/`; o que exige segredo ou privilégio vai para Edge Functions em `supabase/functions/` (`tts`, `delete-account`) |
 | Event bus / workers | N/A — sem processamento assíncrono de background neste app |
 | Observabilidade OTel/Prometheus/health endpoints | N/A (sem servidor); reduzido a logger estruturado local — **pendente**, ver módulo 05 em `MASTER-PLAN.md` |
 | `lefthook.yml` | `core.hooksPath .githooks/` (zero dependência nova) |

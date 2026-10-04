@@ -1,11 +1,11 @@
 {
-    "name": "ear_training",
-    "short_name": "ear_training",
+    "name": "BOSYN — Reabilitação auditiva",
+    "short_name": "BOSYN",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Teste auditivo e treino de audição no celular.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

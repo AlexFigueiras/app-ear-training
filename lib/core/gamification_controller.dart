@@ -34,8 +34,11 @@ class GamificationController extends ChangeNotifier {
 
   /// Seleção Inteligente baseada no Audiograma [Fase 1]
   Map<String, dynamic>? getSmartPhoneme(List<dynamic> audiogramData) {
-    final List<Map<String, dynamic>> level2Stimuli = List<Map<String, dynamic>>.from(PHONEME_REHAB_DATA['level_2']);
-    
+    final List<Map<String, dynamic>> level2Stimuli = List<Map<String, dynamic>>.from(PHONEME_REHAB_DATA['level_2'])
+      // 'random_rehab' são placeholders ("Palavra1"/"Falsa1"), não palavras reais: nunca vão
+      // para o paciente (a TTS falaria "Palavra um" e as opções mostrariam "Falsa1").
+      ..removeWhere((s) => s['type'] == 'random_rehab');
+
     // Filtra frequências com perda > 25dB
     final criticalFreqs = audiogramData.where((p) => (p['threshold'] as num) > 25).map((p) => p['frequency'] as int).toList();
     
@@ -106,6 +109,19 @@ class GamificationController extends ChangeNotifier {
 
   void updateStreak(int days) {
     _currentStreak = days;
+    notifyListeners();
+  }
+
+  /// Zera o estado em memória (logout / exclusão de conta): o próximo usuário do aparelho
+  /// não pode herdar XP, sequência ou SNR do anterior.
+  void resetForNewUser() {
+    _totalXP = 0;
+    _neuralEnergy = 5;
+    _currentStreak = 0;
+    _sessionsCompletedToday = 0;
+    _acuityLevel = "INITIAL";
+    _currentSNR = 20.0;
+    _maxNoiseThreshold = 0.0;
     notifyListeners();
   }
 
