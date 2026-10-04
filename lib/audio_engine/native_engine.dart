@@ -103,6 +103,15 @@ class NativeDSPBridge implements ffi.Finalizable {
     func(_enginePtr, intensity);
   }
 
+  /// Zera alvo, ruído e tom de teste sem desligar o stream.
+  void silenceAll() {
+    final func = _lib.lookupFunction<
+        ffi.Void Function(ffi.Pointer<EngineContext>),
+        void Function(ffi.Pointer<EngineContext>)
+    >('silence_all');
+    func(_enginePtr);
+  }
+
   void setTargetPanning(double panning) {
     final func = _lib.lookupFunction<
         ffi.Void Function(ffi.Pointer<EngineContext>, ffi.Float),

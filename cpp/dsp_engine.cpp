@@ -80,8 +80,17 @@ void DspEngine::setAudiogramProfile(const float* freqs, const float* gains, int 
 // Núcleo de Latência Ultrabaixa (Obrigação: Executar em < 20ms de latência overall)
 void DspEngine::processAudioBlock(float* audioData, int numFrames, int numChannels) {
     if (numChannels > 2) numChannels = 2; // Suporta apenas mono/stereo
+    // Blocos maiores que o buffer interno são processados em pedaços (antes o excedente saía
+    // sem processamento).
+    for (int offset = 0; offset < numFrames; offset += kMaxFramesPerCallback) {
+        const int frames = std::min(kMaxFramesPerCallback, numFrames - offset);
+        processChunk(audioData + offset * numChannels, frames, numChannels);
+    }
+}
 
-    if (numFrames > kMaxFramesPerCallback) numFrames = kMaxFramesPerCallback;
+void DspEngine::processChunk(float* audioData, int numFrames, int numChannels) {
+    if (numChannels > 2) numChannels = 2; // Suporta apenas mono/stereo
+
 
     // 1. Extrai canais para processamento FIR (usando buffer pré-alocado)
     for (int ch = 0; ch < numChannels; ch++) {

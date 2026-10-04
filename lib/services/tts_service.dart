@@ -55,15 +55,19 @@ class GoogleTTSService {
     return cacheFile.path;
   }
 
+  /// "v2|48000": invalida o cache antigo, gravado quando a função ainda devolvia 24 kHz. O
+  /// decodificador ([WavDecoder]) lê a taxa real de qualquer forma, mas assim cada aparelho
+  /// baixa de novo na taxa nova quando a função atualizada estiver no ar.
   String _generateCacheKey(
       String text, String lang, String voice, double rate, double pitch) {
-    final String input = '$text|$lang|$voice|$rate|$pitch';
+    final String input = 'v2|48000|$text|$lang|$voice|$rate|$pitch';
     return md5.convert(utf8.encode(input)).toString();
   }
 
+  /// Pasta de suporte do app, e não a temporária: o sistema pode limpar a temporária a
+  /// qualquer momento, e cada palavra baixada de novo custa uma chamada ao servidor.
   Future<File> _getCacheFile(String key) async {
-    final Directory tempDir = await getTemporaryDirectory();
-    final String path = '${tempDir.path}/tts_cache_$key.wav';
-    return File(path);
+    final Directory dir = await getApplicationSupportDirectory();
+    return File('${dir.path}/tts_cache_$key.wav');
   }
 }

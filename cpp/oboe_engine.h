@@ -69,6 +69,16 @@ public:
         whiteNoiseGenerator.setAmplitude(intensity);
     }
 
+    // Silêncio total: alvo, ruído (amostra e gerador) e tom de teste. Chamado ao sair de cada
+    // tela de treino, ao ir para segundo plano e ao desconectar o fone. Antes, o ruído do
+    // Coquetel continuava tocando para sempre depois da sessão.
+    void silenceAll() {
+        targetPlayer.stop();
+        noisePlayer.stop();
+        whiteNoiseGenerator.setAmplitude(0.0f);
+        testOscillator.setStop();
+    }
+
     void setAudiogramProfile(const float* freqs, const float* gains, int count) {
         dspEngine.setAudiogramProfile(freqs, gains, count);
     }

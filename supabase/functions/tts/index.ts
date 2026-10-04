@@ -64,6 +64,9 @@ export default {
         voice: { languageCode, name: voiceName },
         audioConfig: {
           audioEncoding: "LINEAR16",
+          // Taxa do motor de áudio do app. Sem isto o Google devolve a taxa nativa da voz
+          // (24 kHz no WaveNet) e o app tocava a fala uma oitava acima e 2x mais rápida.
+          sampleRateHertz: 48000,
           speakingRate: clamp(body.speakingRate, 0.25, 4.0, 1.0),
           pitch: clamp(body.pitch, -20.0, 20.0, 0.0),
         },

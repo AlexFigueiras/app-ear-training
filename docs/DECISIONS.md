@@ -1,6 +1,50 @@
 # DECISIONS — histórico vivo de decisões
 > Entradas no topo (mais recente primeiro). Estado do que existe fica em `docs/STATUS.md`.
 
+## [2026-10-04] Plano "treino eficaz" — Etapa 2 (áudio que sai errado)
+- **Status:** accepted (aguardando CI + checklist no celular; deploy da função `tts` é ação
+  humana)
+- **Contexto:**
+  - A voz tocava uma oitava acima e com o dobro da velocidade: a função `tts` não pedia taxa
+    (WaveNet = 24 kHz), e o app pulava 44 bytes fixos e tocava a 48 kHz.
+  - O ruído do Coquetel nunca desligava, e o motor é compartilhado.
+  - O pan de uma tela anterior (±1) fazia a palavra da Fonêmica tocar num ouvido só.
+  - A resposta era liberada antes de a palavra terminar.
+  - O "Repetir" estava invertido.
+  - O log do Coquetel gravava o SNR já atualizado.
+  - A calibração travava, porque o símbolo nativo `get_current_timestamp_ns` não existia.
+  - O tom de calibração saía em escala cheia, e o tom do teste podia passar de 1,0.
+  - Havia log (`std::cerr`) dentro do callback de áudio.
+  - Blocos acima de 1024 frames saíam sem processamento.
+  - Ao desplugar o fone, o motor reiniciava e seguia tocando no alto-falante.
+- **Decisões:**
+  - **Voz:**
+    - `supabase/functions/tts` pede `sampleRateHertz: 48000`.
+    - `lib/audio_engine/wav_decoder.dart` percorre os chunks RIFF, lê a taxa real e reamostra
+      com sinc janelado (Blackman). Assim o app funciona antes e depois do deploy.
+    - Cache com chave `v2|48000|…` na pasta de suporte, não na temporária.
+  - **Silêncio:**
+    - Novo símbolo nativo `silence_all` (alvo, ruído e tom), chamado no `dispose` de todas as
+      telas de treino e no fim do Coquetel.
+    - `AudioLifecycleGuard` silencia quando o app sai da frente.
+    - O evento "becoming noisy" (fone desplugado) silencia em vez de reiniciar.
+    - Estímulos sem ruído zeram o ruído e centralizam o pan.
+  - **Resposta:** cada `play*` devolve a duração do estímulo; a tela só libera a resposta
+    quando a palavra termina. O "Repetir" fica ativo quando não há nada tocando. Falha de rede
+    mostra aviso em vez de travar a tela.
+  - **Tons:** `ToneFactory` com rampa cosseno de 20 ms; calibração a -20 dBFS; teto no nível
+    do tom do teste.
+  - **Nativo:**
+    - sem log no callback;
+    - `DspEngine` processa em pedaços;
+    - `get_current_timestamp_ns` usa o mesmo relógio (`steady_clock`) do onset.
+- **Testes:** `test/wav_decoder_test.dart` (24k→48k mantendo altura e duração, chunk extra de
+  tamanho ímpar, estéreo, PCM cru, formato inválido) e `test/tone_factory_test.dart`.
+- **Consequências:**
+  - O ganho de banda larga com teto de +12 dB segue provisório até a Etapa 3.
+  - O teste auditivo antigo segue impreciso até a Etapa 4.
+  - `threshold_test_screen.dart` foi a 346 linhas líquidas (aviso); a Etapa 4 o reescreve.
+
 ## [2026-10-04] Plano "treino eficaz" — Etapa 1 (limpeza e promessas)
 - **Status:** accepted (aguardando CI + checklist no celular)
 - **Contexto:** havia código órfão que chama APIs do motor que mudam na Etapa 3, e um PDF

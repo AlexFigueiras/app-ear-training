@@ -6,6 +6,8 @@ import '../models/audiogram.dart';
 import '../services/tts_service.dart';
 import 'package:flutter/foundation.dart';
 import 'native_engine.dart';
+import 'tone_factory.dart';
+import 'wav_decoder.dart';
 
 /// Motor de Áudio Central para Reabilitação Auditiva
 class AudioRehabEngine {
@@ -94,179 +96,140 @@ class AudioRehabEngine {
     return avgLoss / 2.0; // REGRA DE OURO
   }
 
-  /// NÍVEL 2: Discriminação Fonêmica com EQ Dinâmico
-  Future<void> playPhonemicStimulus({
+  /// Sintetiza (ou lê do cache) e decodifica a palavra já na taxa do motor (48 kHz).
+  Future<DecodedAudio> _loadSpeech(String text) async {
+    final path = await _tts.synthesize(text);
+    final bytes = await File(path).readAsBytes();
+    return WavDecoder.decodeToRate(bytes);
+  }
+
+  /// Ganho de banda larga provisório (meio-ganho + boost, teto de +12 dB). Substituído pelo EQ
+  /// por orelha e pelo boost só nos agudos na Etapa 3 do plano.
+  double _legacyGainLinear(double gainDb) =>
+      math.pow(10, gainDb / 20).toDouble().clamp(1.0, 4.0);
+
+  /// NÍVEL 2: Discriminação Fonêmica. Devolve a duração do estímulo: a tela só libera a
+  /// resposta depois que a palavra terminou de tocar.
+  Future<Duration> playPhonemicStimulus({
     required String text,
     required double freqBand,
     double extraBoostDb = 0.0,
   }) async {
     _verifySecurityScope();
+    final clinicalGainDb = getCompensatoryGain(freqBand) + extraBoostDb;
+    final audio = await _loadSpeech(text);
 
-    // 1. Calcula Ganho Clínico (Half-Gain Rule + boost adaptativo)
-    double clinicalGainDb = getCompensatoryGain(freqBand) + extraBoostDb;
-    // Converte dB para linear e aplica ao volume do sample (clamp a +12 dB = 4x)
-    double gainLinear = math.pow(10, clinicalGainDb / 20).toDouble().clamp(1.0, 4.0);
+    // Sem ruído e no centro: o estado do motor é compartilhado entre telas, e antes o pan de um
+    // teste anterior (±1) fazia a palavra tocar num ouvido só.
+    _nativeBridge.setNoiseIntensity(0.0);
+    _nativeBridge.setTargetPanning(0.0);
+    _loadSampleToNative(audio.samples, volume: _legacyGainLinear(clinicalGainDb));
 
-    // 2. Síntese de Fala
-    final path = await _tts.synthesize(text);
-    final bytes = await File(path).readAsBytes();
-    Float32List samples = _convertInt16ToFloat32(bytes);
-
-    // 3. Carrega e executa no Native DSP com ganho clínico real
-    _loadSampleToNative(samples, isTarget: true, volume: gainLinear);
-
-    debugPrint("ESTÍMULO N2: '$text' | Freq: $freqBand Hz | Gain EQ: +${clinicalGainDb.toStringAsFixed(1)} dB (${gainLinear.toStringAsFixed(2)}x)");
+    debugPrint("ESTÍMULO N2: '$text' | Freq: $freqBand Hz | Gain: +${clinicalGainDb.toStringAsFixed(1)} dB");
+    return audio.duration;
   }
 
-  /// NÍVEL 3: Atenção Espacial (Panning Binaural)
-  Future<void> playSpatialStimulus({
+  /// NÍVEL 3: Atenção Espacial (provisório: redesenho na Etapa 9 do plano).
+  Future<Duration> playSpatialStimulus({
     required String text,
     required double panning, // -1.0 a 1.0
     double freqBand = 4000.0,
   }) async {
     _verifySecurityScope();
+    final gainDb = getCompensatoryGain(freqBand);
+    final audio = await _loadSpeech(text);
 
-    // 1. Configura Panning Nativo
+    _nativeBridge.setNoiseIntensity(0.0);
     _nativeBridge.setTargetPanning(panning);
+    _loadSampleToNative(audio.samples, volume: _legacyGainLinear(gainDb));
 
-    // 2. Aplica EQ de Meio Ganho
-    double gainDb = getCompensatoryGain(freqBand);
-    double gainLinear = math.pow(10, gainDb / 20).toDouble().clamp(1.0, 4.0);
-
-    final path = await _tts.synthesize(text);
-    final bytes = await File(path).readAsBytes();
-    Float32List samples = _convertInt16ToFloat32(bytes);
-
-    // 3. Carrega no Mixer com ganho clínico real
-    _loadSampleToNative(samples, isTarget: true, volume: gainLinear);
-
-    debugPrint("ESTÍMULO ESPACIAL: '$text' | Pan: $panning | EQ: +${gainDb.toStringAsFixed(1)} dB (${gainLinear.toStringAsFixed(2)}x)");
+    debugPrint("ESTÍMULO ESPACIAL: '$text' | Pan: $panning | Gain: +${gainDb.toStringAsFixed(1)} dB");
+    return audio.duration;
   }
 
-
-
-  /// CALIBRAÇÃO: Tom senoidal puro para ajuste de hardware
-  Future<void> playCalibrationTone({
-    double frequencyHz = 1000.0,
-    double durationSeconds = 1.0,
-  }) async {
-    // 1. Garante que o hardware esteja ativo (mesmo sem audiograma inicial)
-    if (!_isInitialized) _nativeBridge.startHardwareAudio();
-
-    // 2. Gera Senoide
-    final int numSamples = (durationSeconds * _fs).toInt();
-    final Float32List samples = Float32List(numSamples);
-    for (int i = 0; i < numSamples; i++) {
-      samples[i] = math.sin(2 * math.pi * frequencyHz * i / _fs);
-    }
-
-    // 3. Carrega no motor nativo
-    _loadSampleToNative(samples, isTarget: true);
-    
-    debugPrint("CALIBRAÇÃO: Tom de $frequencyHz Hz emitido por $durationSeconds segundos.");
-  }
-
-  /// NÍVEL 4: O Efeito Coquetel - SNR Balanceado [AMBIENTE HOSTIL]
-  Future<void> playCocktailStimulus({
+  /// NÍVEL 4: Fala no ruído (provisório: ruído de fala e SNR exato na Etapa 7 do plano).
+  Future<Duration> playCocktailStimulus({
     required String text,
     required double snrDb,
     required String noiseEnvironment,
     double freqBand = 4000.0,
   }) async {
     _verifySecurityScope();
+    final clinicalGainDb = getCompensatoryGain(freqBand);
+    final audio = await _loadSpeech(text);
 
-    // 1. Configura Intensidade do Ruído (relação SNR → linear)
-    double noiseIntensity = math.pow(10, (-snrDb) / 20).toDouble();
+    final noiseIntensity = math.pow(10, (-snrDb) / 20).toDouble();
     _nativeBridge.setNoiseIntensity(noiseIntensity.clamp(0.0, 1.0));
+    _nativeBridge.setTargetPanning(0.0);
+    _loadSampleToNative(audio.samples, volume: _legacyGainLinear(clinicalGainDb));
 
-    // 2. Aplica EQ Clínico no Alvo + ganho real aplicado ao volume do sample
-    double clinicalGainDb = getCompensatoryGain(freqBand);
-    double gainLinear = math.pow(10, clinicalGainDb / 20).toDouble().clamp(1.0, 4.0);
-
-    // 3. Síntese
-    final path = await _tts.synthesize(text);
-    final bytes = await File(path).readAsBytes();
-    Float32List samples = _convertInt16ToFloat32(bytes);
-
-    // 4. Carrega no motor nativo com ganho clínico real
-    _loadSampleToNative(samples, isTarget: true, volume: gainLinear);
-
-    debugPrint("MISTURA COQUETEL: ENV=$noiseEnvironment | SNR=$snrDb dB | EQ: +${clinicalGainDb.toStringAsFixed(1)} dB");
+    debugPrint("MISTURA COQUETEL: ENV=$noiseEnvironment | SNR=$snrDb dB | Gain: +${clinicalGainDb.toStringAsFixed(1)} dB");
+    return audio.duration;
   }
 
-  void _loadSampleToNative(Float32List samples, {bool isTarget = true, double volume = 1.0}) {
-    final pointer = calloc<ffi.Float>(samples.length);
-    for (int i = 0; i < samples.length; i++) {
-      pointer[i] = samples[i];
-    }
-
-    if (isTarget) {
-      _nativeBridge.setTargetSample(pointer, samples.length, volume, false);
-    } else {
-      _nativeBridge.setNoiseSample(pointer, samples.length, 1.0, true);
-    }
-    calloc.free(pointer);
-  }
-
-  Float32List _convertInt16ToFloat32(Uint8List bytes) {
-    int offset = 0;
-    if (bytes.length > 44 && String.fromCharCodes(bytes.sublist(0, 4)) == "RIFF") {
-      offset = 44;
-    }
-    final int16List = bytes.buffer.asInt16List(offset);
-    final floatList = Float32List(int16List.length);
-    for (int i = 0; i < int16List.length; i++) {
-      floatList[i] = int16List[i] / 32768.0;
-    }
-    return floatList;
-  }
-
-  void stop() {
-    _nativeBridge.stopHardwareAudio();
-  }
-
-  /// NÍVEL 4: O Efeito Coquetel - SNR Balanceado (Alias legado)
-  Future<void> playSpeechInNoise({
-    required String targetText,
-    required double snrDb,
+  /// Tom de calibração: 1 kHz a -20 dBFS (antes era seno em escala cheia, alto demais para
+  /// "ajuste até ficar confortável"), centralizado e com rampas para não estalar.
+  Future<Duration> playCalibrationTone({
+    double frequencyHz = 1000.0,
+    double durationSeconds = 1.0,
   }) async {
-    return playCocktailStimulus(
-      text: targetText,
-      snrDb: snrDb,
-      noiseEnvironment: 'RESTAURANTE',
+    if (!_isInitialized) _nativeBridge.startHardwareAudio();
+    _nativeBridge.setNoiseIntensity(0.0);
+    _nativeBridge.setTargetPanning(0.0);
+    final samples = ToneFactory.sine(
+      frequencyHz: frequencyHz,
+      seconds: durationSeconds,
+      amplitude: ToneFactory.calibrationAmplitude,
+      sampleRate: _fs,
     );
+    _loadSampleToNative(samples);
+    return Duration(microseconds: (durationSeconds * 1e6).round());
   }
 
-  /// CALIBRAÇÃO: Tom senoidal puro para ajuste de hardware (Alias para ThresholdTest)
-  Future<void> playPureTone({
+  /// Tom puro do teste de limiar. Nível nominal em dB relativos (0 dB = -80 dBFS), com teto
+  /// em [_kRefDb] (escala cheia): acima disso o som só distorceria.
+  Future<Duration> playPureTone({
     required int frequencyHz,
     required int durationMs,
     required EarSide ear,
     required double dbLevel,
   }) async {
     _verifySecurityScope();
+    final level = math.min(dbLevel, _kRefDb);
+    final samples = ToneFactory.sine(
+      frequencyHz: frequencyHz.toDouble(),
+      seconds: durationMs / 1000.0,
+      amplitude: math.pow(10, (level - _kRefDb) / 20).toDouble(),
+      sampleRate: _fs,
+    );
 
-    // 1. Gera Senoide
-    final int numSamples = (durationMs / 1000.0 * _fs).toInt();
-    final Float32List samples = Float32List(numSamples);
-    
-    // Nível Linear: 10^((dB HL - Ref) / 20)
-    double amplitude = math.pow(10, (dbLevel - _kRefDb) / 20).toDouble();
-
-    for (int i = 0; i < numSamples; i++) {
-      samples[i] = amplitude * math.sin(2 * math.pi * frequencyHz * i / _fs);
-    }
-
-    // 2. Configura Panning (L/R)
     double targetPanning = 0.0;
     if (ear == EarSide.left) targetPanning = -1.0;
     if (ear == EarSide.right) targetPanning = 1.0;
+    _nativeBridge.setNoiseIntensity(0.0);
     _nativeBridge.setTargetPanning(targetPanning);
+    _loadSampleToNative(samples);
 
-    // 3. Carrega no motor nativo
-    _loadSampleToNative(samples, isTarget: true);
-    
-    debugPrint("PURE TONE: $frequencyHz Hz | $dbLevel dB | Ear: $ear");
+    debugPrint("PURE TONE: $frequencyHz Hz | $level dB | Ear: $ear");
+    return Duration(milliseconds: durationMs);
+  }
+
+  void _loadSampleToNative(Float32List samples, {double volume = 1.0}) {
+    final pointer = calloc<ffi.Float>(samples.length);
+    pointer.asTypedList(samples.length).setAll(0, samples);
+    _nativeBridge.setTargetSample(pointer, samples.length, volume, false);
+    calloc.free(pointer);
+  }
+
+  /// Silêncio imediato (alvo, ruído e tom), sem desligar o stream de áudio. Usado ao sair das
+  /// telas de treino, ao ir para segundo plano e ao desconectar o fone.
+  void silenceAll() {
+    _nativeBridge.silenceAll();
+  }
+
+  void stop() {
+    _nativeBridge.silenceAll();
+    _nativeBridge.stopHardwareAudio();
   }
 
   void _verifySecurityScope() {

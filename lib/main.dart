@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:ear_training/core/app_config.dart';
 import 'package:ear_training/core/gamification_controller.dart';
+import 'package:ear_training/ui/audio_lifecycle_guard.dart';
 import 'package:ear_training/ui/screens/session_gate.dart';
 import 'package:ear_training/ui/screens/startup_error_screen.dart';
 import 'package:ear_training/services/supabase_service.dart';
@@ -67,6 +68,8 @@ class EarTrainingApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF0A0A0A),
         primaryColor: const Color(0xFF2563EB),
       ),
+      // Silencia o áudio sempre que o app sai da frente (ver AudioLifecycleGuard).
+      builder: (context, child) => AudioLifecycleGuard(child: child!),
       home: const SessionGate(),
     );
   }

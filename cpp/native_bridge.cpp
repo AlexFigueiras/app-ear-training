@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <chrono>
 #include <cstdlib>
 
 #ifdef __ANDROID__
@@ -100,6 +101,24 @@ void set_target_panning(EngineContext* ctx, float panning) {
 #ifdef __ANDROID__
     if (ctx && ctx->engine) ctx->engine->setTargetPanning(panning);
 #endif
+}
+
+NATIVE_EXPORT
+void silence_all(EngineContext* ctx) {
+#ifdef __ANDROID__
+    if (ctx && ctx->engine) ctx->engine->silenceAll();
+#endif
+}
+
+// Relógio do mesmo domínio de markStimulusOnset (steady_clock), para medir tempo de reação.
+// O Dart (NativeDSPBridge.getCurrentTimestampNs) chamava este símbolo, que não existia: a
+// tela de calibração travava no primeiro toque.
+NATIVE_EXPORT
+int64_t get_current_timestamp_ns(EngineContext* ctx) {
+    (void)ctx;
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
 }
 
 NATIVE_EXPORT

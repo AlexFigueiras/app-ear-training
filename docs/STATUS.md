@@ -28,9 +28,9 @@ Plano aprovado em 2026-10-04: 14 etapas (0–13), uma por vez; cada uma só fech
 checklist de escuta no celular (APK de profile). Análise e porquês em `docs/DECISIONS.md`.
 | Etapa | Estado | Notas |
 |---|---|---|
-| 0 — Base verde (analyze limpo, job `native-tests`, APK de profile no CI) | 🟡 | Teste da política (pumpAndSettle estourava esperando o asset em tempo simulado) corrigido; aguardando CI verde |
-| 1 — Limpeza e promessas | 🟡 | Código pronto; aguardando CI e checklist |
-| 2 — Áudio que sai errado (TTS 48 kHz, ruído que não desliga, Repetir) | ⬜ | |
+| 0 — Base verde (analyze limpo, job `native-tests`, APK de profile no CI) | ✅ | CI verde (run 37238438644); checklist ok do usuário |
+| 1 — Limpeza e promessas | ✅ | CI verde; checklist ok do usuário |
+| 2 — Áudio que sai errado (TTS 48 kHz, ruído que não desliga, Repetir) | 🟡 | Código pronto; aguardando CI e checklist. **Ação humana:** publicar a Edge Function `tts` atualizada (o app já funciona antes disso) |
 | 3 — Motor C++ consertado (EQ multibanda, bypass de medição, limitador) | ⬜ | |
 | 4 — Teste auditivo confiável | ⬜ | |
 | 5 — Banco de estímulos que obriga a ouvir | ⬜ | |
@@ -50,7 +50,7 @@ checklist de escuta no celular (APK de profile). Análise e porquês em `docs/DE
 | Conta e privacidade (sair, excluir conta, política no app) | 🟡 | `lib/ui/screens/account_screen.dart`, `lib/services/account_service.dart`, `lib/ui/screens/legal_document_screen.dart`, `docs/legal/`, `supabase/functions/delete-account/` | Código pronto; exclusão depende de publicar a Edge Function e aplicar a migration 003. Textos legais com `[PREENCHER]` |
 | Configuração de build e fail-fast no boot | ✅ | `lib/core/app_config.dart`, `lib/ui/screens/startup_error_screen.dart`, `lib/main.dart` | `--dart-define-from-file=.env`; recusa chave que não seja publishable/anon. Coberto por `test/app_config_test.dart` |
 | Onboarding | 🟡 | `lib/ui/screens/onboarding_screen.dart` | Abre com o aviso de saúde; sem promessa de "remapear" a audição; "Pular teste" pula de fato (Etapa 1) |
-| Calibração de áudio | 🟡 | `lib/ui/screens/calibration_screen.dart` | Existe; é âncora clínica de todos os níveis (`docs/MASTER_PLAN.md` §4.3) |
+| Calibração de latência | 🟡 | `lib/ui/screens/calibration_screen.dart` | Travava no primeiro toque (símbolo nativo `get_current_timestamp_ns` inexistente) — corrigido na Etapa 2. Bip a -20 dBFS com rampa |
 | Home / dashboard de treino | 🟡 | `lib/ui/screens/home_screen.dart` | Existe **duplicidade estrutural**: há uma segunda árvore de telas em `lib/screens/` paralela a `lib/ui/screens/` — não resolvida neste bootstrap (decisão que toca `lib/`, fora de escopo, ver `docs/ARCHITECTURE.md`) |
 | Teste de limiar tonal (Threshold Test) | 🟡 | `lib/screens/threshold_test_screen.dart` | Existe |
 | Discriminação fonêmica | 🟡 | `lib/screens/phonemic_discrimination_screen.dart`, `lib/core/phoneme_map.dart` | Existe |
@@ -61,7 +61,7 @@ checklist de escuta no celular (APK de profile). Análise e porquês em `docs/DE
 | Painel técnico (oculto, long-press no topo da Home) | 🟡 | `lib/screens/widgets/technical_dashboard.dart` | `performance_dashboard`/`rehab_trends_chart` (órfãos) removidos na Etapa 1. Vira painel de "QA de áudio" na Etapa 3 |
 | Engine de áudio nativo (DSP/FFI) | 🟡 | `lib/audio_engine/audio_engine.dart`, `lib/audio_engine/native_engine.dart`, `cpp/` | Crítico (latência clínica); sem teste automatizado conhecido |
 | Telemetria / persistência Supabase | 🟡 | `lib/services/supabase_service.dart`, `lib/services/event_buffer.dart`, `lib/models/rehab_session.dart` | Arquivo offline pendente agora tem dono (não sobe na conta de outro usuário) e é apagado no logout/exclusão |
-| TTS (text-to-speech) | 🟡 | `lib/services/tts_service.dart`, `supabase/functions/tts/` | Via Edge Function autenticada; a chave do Google saiu do app. **Sem a função publicada não há áudio nos treinos** |
+| TTS (text-to-speech) | 🟡 | `lib/services/tts_service.dart`, `lib/audio_engine/wav_decoder.dart`, `supabase/functions/tts/` | Via Edge Function autenticada. Pede 48 kHz (Etapa 2); o app lê a taxa real do WAV e reamostra, então funciona antes e depois do deploy. Cache persistente (pasta de suporte), chave `v2`. **Sem a função publicada não há áudio nos treinos** |
 | Gatekeeper / paywall | 🟡 | `lib/services/gatekeeper_service.dart`, `lib/ui/screens/home_screen.dart` | Só lê o plano; plano escrito apenas pelo servidor (migration 003). Checkout falso e `flutter_stripe` removidos; PRO "em breve" até integrar Google Play Billing (decisão pendente, ver `docs/PLAY_STORE.md` §5) |
 | Modelos de domínio | 🟡 | `lib/models/audiogram.dart`, `rehab_session.dart` | `phonemic_pair.dart` (órfão, assets inexistentes) removido na Etapa 1 |
 

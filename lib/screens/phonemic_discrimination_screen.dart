@@ -5,6 +5,7 @@ import '../audio_engine/audio_engine.dart';
 import '../core/gamification_controller.dart';
 import '../models/audiogram.dart';
 import '../models/rehab_session.dart';
+import '../services/audio_service_manager.dart';
 import '../services/supabase_service.dart';
 
 class PhonemicDiscriminationScreen extends StatefulWidget {
@@ -30,6 +31,7 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
   Map<String, dynamic>? _currentPhoneme;
   List<String> _options = [];
   bool _canRespond = false;
+  bool _isPlaying = false;
 
   // Staircase 2-down/1-up: constrói dificuldade progressiva sem frustrar
   int _consecutiveCorrect = 0;
@@ -65,14 +67,38 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
     _playTarget();
   }
 
+  /// Toca a palavra e só libera a resposta quando ela termina (antes a resposta era liberada no
+  /// instante em que o áudio era carregado, e a próxima tentativa cortava a palavra no meio).
   Future<void> _playTarget() async {
-    if (_currentPhoneme == null) return;
-    await _engine.playPhonemicStimulus(
-      text: _currentPhoneme!['target'] as String,
-      freqBand: (_currentPhoneme!['freq_band'] as num).toDouble(),
-      extraBoostDb: _extraBoostDb,
-    );
-    setState(() => _canRespond = true);
+    if (_currentPhoneme == null || _isPlaying) return;
+    setState(() {
+      _isPlaying = true;
+      _canRespond = false;
+    });
+    try {
+      final duration = await _engine.playPhonemicStimulus(
+        text: _currentPhoneme!['target'] as String,
+        freqBand: (_currentPhoneme!['freq_band'] as num).toDouble(),
+        extraBoostDb: _extraBoostDb,
+      );
+      await Future.delayed(duration);
+      if (!mounted) return;
+      setState(() {
+        _isPlaying = false;
+        _canRespond = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isPlaying = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Não foi possível tocar a palavra. Verifique a internet e toque em Repetir.")));
+    }
+  }
+
+  @override
+  void dispose() {
+    AudioServiceManager().silenceAll();
+    super.dispose();
   }
 
   void _handleResponse(String selected) {
@@ -212,7 +238,7 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
             const SizedBox(height: 80),
             IconButton(
               icon: const Icon(Icons.refresh, color: Colors.grey, size: 32),
-              onPressed: _canRespond ? null : _playTarget,
+              onPressed: _isPlaying ? null : _playTarget,
               tooltip: "Repetir estímulo",
             ),
           ],

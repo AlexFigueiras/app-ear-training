@@ -41,6 +41,12 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
     ));
   }
 
+  @override
+  void dispose() {
+    _engine.silenceAll(); // não deixa um tom tocando ao sair no meio do teste
+    super.dispose();
+  }
+
   void _startFrequencyTest() {
     setState(() {
       _isTesting = true;

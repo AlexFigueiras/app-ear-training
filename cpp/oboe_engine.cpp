@@ -86,20 +86,7 @@ oboe::DataCallbackResult OboeEngine::onAudioReady(
     
     // Configura FPU para Flush-to-Zero evitando picos de CPU com N°s Denormais (Silêncio Assintótico)
     setDenormalsAreZero();
-
-    // PROVA DE HARDWARE: Teste de Denormais
-    static bool denormalTested = false;
-    if (!denormalTested) {
-        volatile float tiny1 = 1e-20f;
-        volatile float tiny2 = 1e-20f;
-        volatile float result = tiny1 * tiny2; // 1e-40 é denormal no IEEE 754 float
-        if (result == 0.0f) {
-            std::cerr << "[HARDWARE-DSP] FTZ/DAZ ATIVADO! Denormal cortado a zero absoluto: " << result << std::endl;
-        } else {
-            std::cerr << "[HARDWARE-DSP] AVISO FTZ/DAZ: Falha. Denormal vazou: " << result << std::endl;
-        }
-        denormalTested = true;
-    }
+    // Sem log no callback: I/O aqui bloqueia a thread de áudio e causa falhas (glitches).
 
     float *floatData = static_cast<float *>(audioData);
     

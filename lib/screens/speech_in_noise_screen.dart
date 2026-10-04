@@ -6,6 +6,7 @@ import '../audio_engine/audio_engine.dart';
 import '../core/gamification_controller.dart';
 import '../models/audiogram.dart';
 import '../models/rehab_session.dart';
+import '../services/audio_service_manager.dart';
 import '../services/supabase_service.dart';
 
 class SpeechInNoiseScreen extends StatefulWidget {
@@ -31,6 +32,7 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
   Map<String, dynamic>? _currentPhoneme;
   List<String> _options = [];
   bool _canRespond = false;
+  bool _isPlaying = false;
 
   static const List<String> _noiseEnvironments = ['RESTAURANTE', 'TRÁFEGO', 'VENTO'];
   String _currentEnvironment = 'RESTAURANTE';
@@ -65,20 +67,46 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
     _playStimulus();
   }
 
+  /// Toca a palavra no ruído e só libera a resposta quando ela termina.
   Future<void> _playStimulus() async {
-    if (_currentPhoneme == null) return;
-    await _engine.playCocktailStimulus(
-      text: _currentPhoneme!['target'] as String,
-      snrDb: _currentSnr,
-      noiseEnvironment: _currentEnvironment,
-      freqBand: (_currentPhoneme!['freq_band'] as num).toDouble(),
-    );
-    setState(() => _canRespond = true);
+    if (_currentPhoneme == null || _isPlaying) return;
+    setState(() {
+      _isPlaying = true;
+      _canRespond = false;
+    });
+    try {
+      final duration = await _engine.playCocktailStimulus(
+        text: _currentPhoneme!['target'] as String,
+        snrDb: _currentSnr,
+        noiseEnvironment: _currentEnvironment,
+        freqBand: (_currentPhoneme!['freq_band'] as num).toDouble(),
+      );
+      await Future.delayed(duration);
+      if (!mounted) return;
+      setState(() {
+        _isPlaying = false;
+        _canRespond = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isPlaying = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Não foi possível tocar a palavra. Verifique a internet e toque em Repetir.")));
+    }
+  }
+
+  @override
+  void dispose() {
+    // Desliga o ruído: antes ele continuava tocando para sempre depois da sessão.
+    AudioServiceManager().silenceAll();
+    super.dispose();
   }
 
   void _handleResponse(String selected) {
     if (!_canRespond || _currentPhoneme == null) return;
 
+    // SNR em que a palavra foi de fato apresentada (o log antigo gravava o valor já atualizado).
+    final presentedSnr = _currentSnr;
     final isCorrect = selected == _currentPhoneme!['target'];
     if (isCorrect) {
       _correctAnswers++;
@@ -96,7 +124,7 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
       'trial': _currentTrial + 1,
       'target': _currentPhoneme!['target'],
       'freq_band': _currentPhoneme!['freq_band'],
-      'snr_at_response': _currentSnr,
+      'snr_presented': presentedSnr,
       'environment': _currentEnvironment,
       'correct': isCorrect,
     });
@@ -106,6 +134,7 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
   }
 
   void _finishSession() async {
+    AudioServiceManager().silenceAll(); // o ruído para já, não só ao sair da tela
     final duration = DateTime.now().difference(_sessionStart).inMilliseconds;
     final session = RehabSession(
       patientId: widget.audiogram.patientId,
@@ -222,7 +251,7 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
             ),
             const SizedBox(height: 16),
             TextButton.icon(
-              onPressed: _canRespond ? null : _playStimulus,
+              onPressed: _isPlaying ? null : _playStimulus,
               icon: const Icon(Icons.refresh, size: 16),
               label: const Text("Repetir", style: TextStyle(fontSize: 11)),
               style: TextButton.styleFrom(foregroundColor: Colors.white38),

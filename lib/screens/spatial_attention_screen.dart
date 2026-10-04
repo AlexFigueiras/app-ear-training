@@ -6,6 +6,7 @@ import '../audio_engine/audio_engine.dart';
 import '../core/gamification_controller.dart';
 import '../models/audiogram.dart';
 import '../models/rehab_session.dart';
+import '../services/audio_service_manager.dart';
 import '../services/supabase_service.dart';
 
 enum SpatialDirection { left, center, right }
@@ -31,6 +32,7 @@ class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
 
   SpatialDirection? _targetDirection;
   bool _canRespond = false;
+  bool _isPlaying = false;
 
   List<Map<String, dynamic>> get _audiogramData => [
     ...widget.audiogram.leftEar.map((p) => {'frequency': p.frequency, 'threshold': p.threshold}),
@@ -67,8 +69,32 @@ class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
     if (_targetDirection == SpatialDirection.left) pan = -1.0;
     if (_targetDirection == SpatialDirection.right) pan = 1.0;
 
-    await _engine.playSpatialStimulus(text: text, panning: pan, freqBand: freqBand);
-    setState(() => _canRespond = true);
+    if (_isPlaying) return;
+    setState(() {
+      _isPlaying = true;
+      _canRespond = false;
+    });
+    try {
+      final duration =
+          await _engine.playSpatialStimulus(text: text, panning: pan, freqBand: freqBand);
+      await Future.delayed(duration); // resposta só depois que a palavra termina
+      if (!mounted) return;
+      setState(() {
+        _isPlaying = false;
+        _canRespond = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isPlaying = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Não foi possível tocar a palavra. Verifique a internet e toque em Repetir.")));
+    }
+  }
+
+  @override
+  void dispose() {
+    AudioServiceManager().silenceAll();
+    super.dispose();
   }
 
   void _handleResponse(SpatialDirection selected) {
@@ -192,7 +218,7 @@ class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
           ),
           const SizedBox(height: 40),
           TextButton.icon(
-            onPressed: _canRespond ? null : _playSpatialSound,
+            onPressed: _isPlaying ? null : _playSpatialSound,
             icon: const Icon(Icons.refresh, size: 16),
             label: const Text("Repetir", style: TextStyle(fontSize: 11)),
             style: TextButton.styleFrom(foregroundColor: Colors.white38),

@@ -8,14 +8,22 @@ class AudioServiceManager {
   factory AudioServiceManager() => _instance;
 
   final AudioRehabEngine _engine = AudioRehabEngine();
-  
+
   AudioServiceManager._internal();
 
   AudioRehabEngine get engine => _engine;
 
-  /// Método Crítico de Segurança Industrial [BOSYN-ZERO-LATENCY]
-  /// Interrompe qualquer fluxo de áudio, limpa buffers e reseta o engine nativo.
-  /// Deve ser chamado ANTES de qualquer transição de tela.
+  /// Silêncio imediato (alvo, ruído e tom) sem desligar o stream. Chamado ao sair de cada tela
+  /// de treino, ao ir para segundo plano e ao desconectar o fone.
+  void silenceAll() {
+    try {
+      _engine.silenceAll();
+    } catch (e) {
+      debugPrint("[AUDIO_MANAGER] Erro ao silenciar: $e");
+    }
+  }
+
+  /// Silencia e desliga o stream de áudio (libera o hardware).
   void forceStopAll() {
     try {
       _engine.stop();

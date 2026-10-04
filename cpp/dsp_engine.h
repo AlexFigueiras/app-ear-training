@@ -29,6 +29,8 @@ private:
     float channelDataBuffer[2][kMaxFramesPerCallback];
     float highFreqBuffer[2][kMaxFramesPerCallback];
 
+    void processChunk(float* audioData, int numFrames, int numChannels);
+
     // Modo Engenheiro: Diagnóstico de Saturação
     std::atomic<bool> isSoftKneeHit{false};
 

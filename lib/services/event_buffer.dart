@@ -73,14 +73,10 @@ class SessionEventBuffer {
     await _updateHardwareInfo();
     
     _audioSessionSub = session.becomingNoisyEventStream.listen((_) async {
-      final oldHardware = _currentHardware;
+      // "Becoming noisy" = o fone foi desconectado. Silencia na hora: antes o motor reiniciava
+      // e o estímulo seguia tocando no alto-falante, no volume ajustado para o fone.
+      AudioServiceManager().silenceAll();
       await _updateHardwareInfo();
-      
-      // RIGOR CLÍNICO: Se o hardware mudou, reiniciamos o motor Oboe para EXCLUSIVE mode.
-      if (oldHardware != _currentHardware) {
-        debugPrint("[HARDWARE_RESET] Reiniciando motor Oboe para novo hardware: $_currentHardware");
-        await AudioServiceManager().engine.restartHardwareAudio();
-      }
     });
 
     // CONNECTIVITY SYNC: Checa conexão a cada 2 minutos para desovar arquivos offline
