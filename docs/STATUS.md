@@ -28,7 +28,7 @@ Plano aprovado em 2026-10-04: 14 etapas (0–13), uma por vez; cada uma só fech
 checklist de escuta no celular (APK de profile). Análise e porquês em `docs/DECISIONS.md`.
 | Etapa | Estado | Notas |
 |---|---|---|
-| 0 — Base verde (analyze limpo, job `native-tests`, APK de profile no CI) | 🟡 | Native tests, analyze e APKs verdes; 1 teste Dart falhando em investigação |
+| 0 — Base verde (analyze limpo, job `native-tests`, APK de profile no CI) | 🟡 | Teste da política (pumpAndSettle estourava esperando o asset em tempo simulado) corrigido; aguardando CI verde |
 | 1 — Limpeza e promessas | 🟡 | Código pronto; aguardando CI e checklist |
 | 2 — Áudio que sai errado (TTS 48 kHz, ruído que não desliga, Repetir) | ⬜ | |
 | 3 — Motor C++ consertado (EQ multibanda, bypass de medição, limitador) | ⬜ | |

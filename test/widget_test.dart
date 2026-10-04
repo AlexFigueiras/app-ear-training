@@ -17,13 +17,16 @@ void main() {
 
   testWidgets('política de privacidade é exibida dentro do app',
       (tester) async {
-    await tester.runAsync(
+    // A leitura do asset só termina em tempo real (runAsync); dentro do tempo simulado do
+    // teste o FutureBuilder ficaria no indicador de carregamento e o pumpAndSettle estouraria.
+    final policy = await tester.runAsync(
         () => rootBundle.loadString(LegalDocuments.privacyPolicyAsset));
 
-    await tester.pumpWidget(const MaterialApp(
+    await tester.pumpWidget(MaterialApp(
       home: LegalDocumentScreen(
         title: 'POLÍTICA DE PRIVACIDADE',
         assetPath: LegalDocuments.privacyPolicyAsset,
+        content: policy,
       ),
     ));
     await tester.pumpAndSettle();

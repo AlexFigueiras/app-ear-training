@@ -7,8 +7,12 @@ class LegalDocumentScreen extends StatelessWidget {
   final String title;
   final String assetPath;
 
+  /// Texto já carregado. Quando presente, a tela não lê o asset. Usado nos testes de widget,
+  /// em que a leitura assíncrona do asset não termina dentro do tempo simulado.
+  final String? content;
+
   const LegalDocumentScreen(
-      {super.key, required this.title, required this.assetPath});
+      {super.key, required this.title, required this.assetPath, this.content});
 
   static const _bodyStyle =
       TextStyle(color: Colors.white70, fontSize: 13, height: 1.5);
@@ -23,7 +27,10 @@ class LegalDocumentScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
       ),
       body: FutureBuilder<String>(
-        future: rootBundle.loadString(assetPath),
+        future: content != null
+            ? Future.value(content)
+            : rootBundle.loadString(assetPath),
+        initialData: content,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return const Center(
