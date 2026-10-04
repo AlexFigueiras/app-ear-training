@@ -56,7 +56,9 @@ jobs:
         run: dart tool/verify_rules.dart
 
       - name: Run tests
-        run: flutter test --coverage
+        run: flutter test --coverage --reporter github
+        # --reporter github: cada falha vira uma anotação no run (legível pela API pública,
+        # sem precisar abrir o log autenticado).
         # Limiar de cobertura enforced: ainda não configurado (módulo 12 — suíte real é débito
         # registrado em docs/STATUS.md, não escrita neste bootstrap).
 
