@@ -3,7 +3,10 @@ enum RehabLevel {
   toneIsolation(1, unlockThreshold: 90.0),
   phonemicDiscrimination(2, unlockThreshold: 85.0),
   spatialAttention(3, unlockThreshold: 80.0),
-  speechInNoise(4, unlockThreshold: 0.0); // Nível final
+  speechInNoise(4, unlockThreshold: 0.0),
+
+  /// Medida de progresso (teste de dígitos no ruído, Etapa 8): não é treino nem nível.
+  digitsInNoise(5, unlockThreshold: 0.0);
 
   final int value;
   final double unlockThreshold; // Precisão necessária para liberar o próximo nível

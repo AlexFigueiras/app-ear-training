@@ -1,6 +1,42 @@
 # DECISIONS — histórico vivo de decisões
 > Entradas no topo (mais recente primeiro). Estado do que existe fica em `docs/STATUS.md`.
 
+## [2026-10-05] Plano "treino eficaz" — Etapa 8 (medida de progresso honesta)
+- **Status:** accepted (aguardando CI + checklist no celular)
+- **Contexto:**
+  - O único "progresso" era o acerto por sessão, que a escada adaptativa mantém constante de
+    propósito e que mistura treinos diferentes.
+  - Melhorar na tarefa treinada inclui familiaridade (Amitay et al., 2006).
+  - O paciente não tinha onde rever o audiograma nem o histórico (achado E1).
+- **Decisões:**
+  - **Teste de dígitos no ruído** (`lib/training/digits_in_noise.dart`, Smits et al., 2004):
+    - 24 trios de dígitos distintos;
+    - acerto = os 3 certos na ordem;
+    - escada 1-acima/1-abaixo de 2 dB a partir de 0 dB (com 3 dígitos o chute é 1/1000);
+    - SRT = média dos trios 5 a 25.
+    - Simulação local: sem viés (±0,05 dB) e dispersão de ~0,6 dB.
+  - **Material que o treino não usa:** números, voz própria (`pt-BR-Wavenet-D`, com fallback),
+    ruído de fala e **sem EQ**. Assim a medida não muda quando o audiograma é refeito. Cada
+    dígito é sintetizado uma vez e normalizado por RMS.
+  - **Rótulo:** "medida interna, não validada clinicamente". O DIN validado usa gravações
+    homogeneizadas e calibradas.
+  - **Frequência e registro:** a cada 14 dias (`DinProcedure.isDue`). Salvo como
+    `RehabLevel.digitsInNoise` (valor 5, coluna `level` inteira, sem migration), com o SRT em
+    `metadata.srt_db`.
+  - **Telas:**
+    - "Audição na fala": instruções, teclado de 3 casas com teclas de 64 dp e nomes para leitor
+      de tela; sem retorno por tentativa (é medida); resumo em linguagem comum.
+    - "Meu progresso" (E1): SRT ao longo do tempo ("mais para baixo = melhor"), audiograma com
+      data e "Refazer", e os 15 treinos mais recentes.
+  - **Home:** o cartão de próximo passo ganha "Hora de medir sua audição na fala" (depois do
+    teste de audição), e entra o botão "Meu progresso". A Home foi a 439 linhas líquidas
+    (aviso; abaixo de 500); a Etapa 10 a refaz e divide.
+- **Verificação:** `test/digits_in_noise_test.dart` (5 testes: viés, trios, regra de acerto,
+  quando medir, texto) rodou localmente; `digit_keypad_test.dart` roda no CI. `flutter analyze`
+  limpo.
+- **Pendente:** confirmar no celular que a voz D existe; se não existir, o motor usa a voz A,
+  que também é do treino.
+
 ## [2026-10-04] Plano "treino eficaz" — Etapa 7 (dificuldade real + Coquetel de verdade)
 - **Status:** accepted (aguardando CI + checklist no celular)
 - **Contexto:**

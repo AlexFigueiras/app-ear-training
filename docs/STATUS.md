@@ -35,8 +35,8 @@ checklist de escuta no celular (APK de profile). Análise e porquês em `docs/DE
 | 4 — Teste auditivo confiável | 🟡 | CI verde (run 37243740170). Checklist no celular adiado pelo usuário. Home e onboarding abrem o teste novo (commit 66031f6, auditoria de UX) |
 | 5 — Banco de estímulos que obriga a ouvir | 🟡 | CI verde (run 37244933547). Checklist no celular adiado pelo usuário |
 | 6 — Feedback e fim de sessão | 🟡 | CI verde (run 37247213640). Checklist no celular adiado pelo usuário |
-| 7 — Dificuldade real + Coquetel com ruído de fala | 🟡 | Código pronto; aguardando CI e checklist |
-| 8 — Medida de progresso (dígitos no ruído) | ⬜ | |
+| 7 — Dificuldade real + Coquetel com ruído de fala | 🟡 | CI verde (run 37248629341). Checklist no celular adiado pelo usuário |
+| 8 — Medida de progresso (dígitos no ruído) | 🟡 | Código pronto (achado E1); aguardando CI e checklist |
 | 9 — Espacial redesenhado | ⬜ | |
 | 10 — Gamificação alinhada ao treino | ⬜ | |
 | 11 — Acessibilidade e linguagem | ⬜ | |
@@ -57,6 +57,7 @@ checklist de escuta no celular (APK de profile). Análise e porquês em `docs/DE
 | Atenção espacial | 🟡 | `lib/screens/spatial_attention_screen.dart` | Existe; monaural e sem adaptação — redesenho na Etapa 9 |
 | Fala no ruído ("Conversa no barulho") | 🟡 | `lib/screens/speech_in_noise_screen.dart`, `lib/audio_engine/masker_bank.dart`, `lib/training/adaptive_staircase.dart` | Etapa 7: ruído contínuo com espectro de fala ou burburinho de 6 vozes (SNR exato, mesmo RMS da fala), 4 opções {sala, fala, salas, falas}, frase "Diga ___ agora", escada 3-acertos/1-erro retomada entre sessões, sessão de ~10 min com "Terminar" |
 | Gamificação (XP / Streak) | 🟡 | `lib/core/gamification_controller.dart` | Energia Neural removida na Etapa 6 (punia o erro que a escada produz de propósito). XP/nível/streak ainda os antigos — reescritos na Etapa 10 |
+| Medida de progresso ("Audição na fala") e "Meu progresso" | 🟡 | `lib/training/digits_in_noise.dart`, `lib/screens/digits_in_noise_screen.dart`, `lib/screens/progress_screen.dart`, `lib/screens/widgets/digit_keypad.dart` | Etapa 8: teste de dígitos no ruído (24 trios, SRT 50%, voz própria, ruído de fala, sem EQ) a cada 14 dias, salvo como `RehabLevel.digitsInNoise`; "Meu progresso" com gráfico do SRT, audiograma e treinos recentes. **Medida interna, não validada clinicamente** |
 | Relatório clínico / missão | 🚫 | — | Removido na Etapa 1 (código órfão; o PDF "clínico" tinha números inventados). Resumo de sessão honesto vem na Etapa 6 |
 | Painel técnico + QA de áudio (oculto, long-press no topo da Home) | 🟡 | `lib/screens/widgets/technical_dashboard.dart`, `qa_audio_panel.dart` | Carga do DSP, xruns, acionamentos do limitador; em debug/profile: tons por orelha e palavra com/sem EQ (Etapa 3) |
 | Motor de áudio nativo (C++/Oboe via FFI) | 🟡 | `cpp/audio_graph.*`, `cpp/eq_bank.h`, `cpp/buffer_source.h`, `cpp/handoff.h`, `cpp/safety_limiter.h`, `cpp/oboe_engine.*`, `cpp/native_bridge.cpp`, `lib/audio_engine/` | Reescrito na Etapa 3: EQ de 8 bandas por orelha (biquads), ruído mixado depois do EQ, bypass para tons de medição, limitador -1 dBFS, troca de buffer sem lock. Testado no host (`cpp/tests/`, ASan/UBSan + TSan); no celular, só pelo checklist |

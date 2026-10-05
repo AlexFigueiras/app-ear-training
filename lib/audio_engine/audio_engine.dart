@@ -164,6 +164,40 @@ class AudioRehabEngine {
     return _durationOf(samples);
   }
 
+  /// Voz do teste de dígitos: diferente das vozes do treino, para a medida não "treinar junto".
+  static const String dinVoice = 'pt-BR-Wavenet-D';
+  static const List<String> _digitWords = [
+    'zero', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove',
+  ];
+  final Map<int, Float32List> _digitCache = {};
+
+  /// Baixa os 10 dígitos antes de o teste começar (para não haver pausa entre trios).
+  Future<void> prepareDigits() async {
+    for (var d = 0; d <= 9; d++) {
+      _digitCache[d] ??= await _loadSpeech(_digitWords[d], voice: dinVoice);
+    }
+  }
+
+  /// Teste de dígitos no ruído: 3 dígitos com 300 ms entre eles, SEM EQ (a medida não pode
+  /// mudar quando o audiograma muda), sobre o ruído de fala iniciado com [startMasker].
+  Future<Duration> playDigitTriplet(List<int> digits, double snrDb) async {
+    _verifySecurityScope();
+    await prepareDigits();
+    final gap = Float32List((0.3 * _fs).round());
+    final parts = <Float32List>[for (final d in digits) ...[_digitCache[d]!, gap]]..removeLast();
+    final triplet = Float32List(parts.fold(0, (n, p) => n + p.length));
+    var offset = 0;
+    for (final p in parts) {
+      triplet.setAll(offset, p);
+      offset += p.length;
+    }
+    _nativeBridge.setDspBypass(true);
+    _nativeBridge.setTargetPanning(0.0);
+    _nativeBridge.setMaskerGain(SignalLevel.maskerGainForSnr(snrDb));
+    _loadSampleToNative(triplet);
+    return _durationOf(triplet);
+  }
+
   /// Painel de QA (só debug/profile): a mesma palavra com e sem o EQ do paciente.
   Future<Duration> playQaWord(String text, {required bool withEq}) async {
     if (!_isInitialized) _nativeBridge.startHardwareAudio();

@@ -5,7 +5,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/gamification_controller.dart';
 import '../../models/audiogram.dart';
 import '../../models/rehab_session.dart';
+import '../../screens/digits_in_noise_screen.dart';
 import '../../screens/phonemic_discrimination_screen.dart';
+import '../../screens/progress_screen.dart';
+import '../../training/digits_in_noise.dart';
 import '../../screens/spatial_attention_screen.dart';
 import '../../screens/speech_in_noise_screen.dart';
 import '../../screens/hearing_test/hearing_test_flow.dart';
@@ -178,7 +181,15 @@ class _HomeScreenState extends State<HomeScreen> {
     if (audiogram != null && mounted) setState(() => _audiogram = audiogram);
   }
 
-  /// Cartão de próximo passo: sem audiograma, ou com audiograma do teste antigo.
+  /// Abre uma tela e recarrega os dados da Home ao voltar.
+  Future<void> _open(Widget screen) async {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+    if (mounted) _loadUserData();
+  }
+
+  /// Cartão de próximo passo: sem audiograma, com audiograma do teste antigo, ou hora de medir
+  /// a audição na fala (teste de dígitos, a cada 14 dias).
+
   Widget? _buildNextStep() {
     final audiogram = _audiogram;
     if (audiogram == null) {
@@ -197,6 +208,15 @@ class _HomeScreenState extends State<HomeScreen> {
             'Seu resultado atual é da versão antiga e pode estar errado. Leva uns 10 minutos.',
         actionLabel: 'Refazer o teste agora',
         onPressed: _runHearingTest,
+      );
+    }
+    if (DinProcedure.isDue(_rehabHistory)) {
+      return NextStepCard(
+        title: 'Hora de medir sua audição na fala',
+        body: 'A cada 14 dias, um teste de uns 4 minutos mostra se você está entendendo melhor '
+            'a fala no barulho.',
+        actionLabel: 'Medir agora',
+        onPressed: () => _open(DigitsInNoiseScreen(audiogram: audiogram)),
       );
     }
     return null;
@@ -255,6 +275,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 12),
                   ],
+                  Center(
+                    child: TextButton.icon(
+                      style: TextButton.styleFrom(
+                          minimumSize: const Size(48, 48),
+                          foregroundColor: HomeColors.textSecondary),
+                      onPressed: () => _open(const ProgressScreen()),
+                      icon: const Icon(Icons.insights),
+                      label: const Text('Meu progresso',
+                          style: TextStyle(fontSize: 15)),
+                    ),
+                  ),
                   if (_audiogram != null && !_audiogram!.isOutdated)
                     Center(
                       child: TextButton.icon(
