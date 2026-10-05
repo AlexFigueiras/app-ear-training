@@ -20,6 +20,10 @@ class GamificationController extends ChangeNotifier {
   double _currentSNR = 20.0;
   double _maxNoiseThreshold = 0.0;
 
+  // Estado das escadas adaptativas por treino (ex.: "phonemic", "cocktail"), salvo entre sessões
+  // para a próxima começar de onde a pessoa parou (Etapa 7).
+  final Map<String, Map<String, dynamic>> _trainingState = {};
+
   // Getters
   int get totalXP => _totalXP;
   int get currentStreak => _currentStreak;
@@ -29,6 +33,13 @@ class GamificationController extends ChangeNotifier {
   bool get recommendRest => _sessionsCompletedToday >= 2;
   double get currentSNR => _currentSNR;
   double get maxNoiseThreshold => _maxNoiseThreshold;
+
+  Map<String, dynamic>? trainingState(String module) => _trainingState[module];
+
+  void saveTrainingState(String module, Map<String, dynamic> state) {
+    _trainingState[module] = state;
+    notifyListeners();
+  }
 
   /// Adiciona XP baseado na performance e tipo de fonema [ANALYTICS]
   void addAcuityXP(double successRate, List<String> phonemes) {
@@ -79,6 +90,7 @@ class GamificationController extends ChangeNotifier {
     _acuityLevel = "INITIAL";
     _currentSNR = 20.0;
     _maxNoiseThreshold = 0.0;
+    _trainingState.clear();
     notifyListeners();
   }
 
@@ -99,6 +111,8 @@ class GamificationController extends ChangeNotifier {
       'current_streak': _currentStreak,
       'acuity_level': _acuityLevel,
       'max_noise_threshold': _maxNoiseThreshold,
+      // Cópia: quem recebe o mapa não pode ser afetado por um reset posterior.
+      'training_state': {for (final e in _trainingState.entries) e.key: Map<String, dynamic>.of(e.value)},
       'last_training_at': DateTime.now().toIso8601String(),
     };
   }
@@ -108,6 +122,12 @@ class GamificationController extends ChangeNotifier {
     _currentStreak = (map['current_streak'] as num?)?.toInt() ?? 0;
     _acuityLevel = map['acuity_level'] as String? ?? "INITIAL";
     _maxNoiseThreshold = (map['max_noise_threshold'] as num?)?.toDouble() ?? 0.0;
+    _trainingState
+      ..clear()
+      ..addAll({
+        for (final e in ((map['training_state'] as Map?) ?? const {}).entries)
+          if (e.value is Map) e.key as String: Map<String, dynamic>.from(e.value as Map),
+      });
     notifyListeners();
   }
 }

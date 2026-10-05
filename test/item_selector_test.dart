@@ -91,6 +91,29 @@ void main() {
     expect(none.next().pair.contrast, Contrast.warmUp);
   });
 
+  test('Coquetel: 4 opções {sala, fala, salas, falas}, qualquer uma pode tocar', () {
+    final selector = ItemSelector(audiogram: _audiogram(_sloping), random: math.Random(6), warmUpTrials: 0);
+    final playedIndex = <int, int>{};
+    for (var i = 0; i < 2000; i++) {
+      final t = selector.nextQuad();
+      expect(t.pair.pluralizable, isTrue);
+      expect(t.options.toSet(), t.pair.quad.toSet());
+      expect(t.options.contains(t.played), isTrue);
+      final idx = t.pair.quad.indexOf(t.played);
+      playedIndex[idx] = (playedIndex[idx] ?? 0) + 1;
+    }
+    for (var i = 0; i < 4; i++) {
+      expect(playedIndex[i]! / 2000, closeTo(0.25, 0.04));
+    }
+
+    // /s/ final inaudível: volta para 2 opções.
+    final noPlural = ItemSelector(
+      audiogram: _audiogram({250: 10, 500: 10, 1000: 15, 2000: 25, 3000: 40, 4000: 55, 6000: 75, 8000: 80}),
+      warmUpTrials: 0,
+    );
+    expect(noPlural.nextQuad().options.length, 2);
+  });
+
   test('sem audiograma: pesos iguais e todos os contrastes agudos possíveis', () {
     final selector = ItemSelector(random: math.Random(5), warmUpTrials: 0);
     expect(selector.inaudible, isEmpty);

@@ -7,7 +7,9 @@ import 'package:flutter/foundation.dart';
 
 import '../models/audiogram.dart';
 import '../services/tts_service.dart';
+import '../training/stimulus_bank.dart';
 import 'audibility_profile.dart';
+import 'masker_bank.dart';
 import 'native_engine.dart';
 import 'signal_level.dart';
 import 'tone_factory.dart';
@@ -75,12 +77,45 @@ class AudioRehabEngine {
   Duration _durationOf(Float32List samples) =>
       Duration(microseconds: samples.length * 1000000 ~/ _fs);
 
-  /// Prepara o caminho do alvo: EQ do paciente (+ boost agudo), sem bypass, pan e ruído.
-  void _prepareSpeech({double boostDb = 0.0, double panning = 0.0, double noise = 0.0}) {
+  /// Prepara o caminho do alvo: EQ do paciente (+ boost agudo), sem bypass e pan. Com [snrDb],
+  /// ajusta o ganho do ruído de fundo (que precisa ter sido iniciado com [startMasker]); sem
+  /// ele, o ruído fica mudo.
+  void _prepareSpeech({double boostDb = 0.0, double panning = 0.0, double? snrDb}) {
     _applyEq(_profile.withHighBandBoost(boostDb));
     _nativeBridge.setDspBypass(false);
     _nativeBridge.setTargetPanning(panning);
-    _nativeBridge.setNoiseIntensity(noise);
+    _nativeBridge.setMaskerGain(snrDb == null ? 0.0 : SignalLevel.maskerGainForSnr(snrDb));
+  }
+
+  /// Inicia o ruído de fundo em loop (mudo até o primeiro [playCocktailStimulus]). O burburinho
+  /// usa 6 frases do TTS; sem rede, cai para o ruído com espectro de fala. Devolve o tipo usado.
+  Future<MaskerType> startMasker(MaskerType type) async {
+    _verifySecurityScope();
+    var used = type;
+    Float32List samples;
+    if (type == MaskerType.babble) {
+      try {
+        samples = MaskerBank.babble([
+          for (var i = 0; i < MaskerBank.babbleSentences.length; i++)
+            await _loadSpeech(MaskerBank.babbleSentences[i], voice: StimulusBank.voices[i % StimulusBank.voices.length]),
+        ]);
+      } catch (e) {
+        debugPrint("Burburinho indisponível ($e); usando ruído de fala.");
+        used = MaskerType.speechShaped;
+        samples = MaskerBank.speechShapedNoise();
+      }
+    } else {
+      samples = MaskerBank.speechShapedNoise();
+    }
+    _nativeBridge.setMaskerGain(0.0);
+    final pointer = calloc<ffi.Float>(samples.length);
+    try {
+      pointer.asTypedList(samples.length).setAll(0, samples);
+      _nativeBridge.setNoiseSample(pointer, samples.length, 1.0, true);
+    } finally {
+      calloc.free(pointer);
+    }
+    return used;
   }
 
   /// Fonêmica. [extraBoostDb] é a dificuldade: ganho extra só nas bandas agudas (>= 3 kHz).
@@ -113,21 +148,19 @@ class AudioRehabEngine {
     return _durationOf(samples);
   }
 
-  /// Fala no ruído. O ruído entra depois do EQ, sobre uma fala de RMS conhecido: o SNR pedido
-  /// é o entregue, inclusive abaixo de 0 dB (antes travava em 0 dB).
-  /// Provisório: ruído branco até a Etapa 7 (ruído de fala/babble).
+  /// Fala no ruído. Fala e ruído têm o mesmo RMS e o ruído entra depois do EQ: o SNR pedido é o
+  /// entregue, inclusive abaixo de 0 dB. O ruído precisa ter sido iniciado com [startMasker].
   Future<Duration> playCocktailStimulus({
     required String text,
     String? voice,
     required double snrDb,
-    required String noiseEnvironment,
     double freqBand = 4000.0,
   }) async {
     _verifySecurityScope();
     final samples = await _loadSpeech(text, voice: voice);
-    _prepareSpeech(noise: SignalLevel.whiteNoiseAmplitudeForSnr(snrDb).clamp(0.0, 0.8));
+    _prepareSpeech(snrDb: snrDb);
     _loadSampleToNative(samples);
-    debugPrint("COQUETEL: SNR=$snrDb dB | ambiente=$noiseEnvironment");
+    debugPrint("COQUETEL: SNR=$snrDb dB");
     return _durationOf(samples);
   }
 
@@ -191,7 +224,7 @@ class AudioRehabEngine {
   void _prepareTone({required double panning}) {
     _nativeBridge.setDspBypass(true);
     _nativeBridge.setTargetPanning(panning);
-    _nativeBridge.setNoiseIntensity(0.0);
+    _nativeBridge.setMaskerGain(0.0);
   }
 
   void _loadSampleToNative(Float32List samples) {

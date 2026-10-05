@@ -80,6 +80,16 @@ int main() {
         CHECK_NEAR(peak(out, 2 * 12000), 0.01, 0.0005);
     }
 
+    // 3b. Ganho do masker (é o que define o SNR): -10 dB no ganho = -10 dB na saída, suavizado.
+    {
+        AudioGraph g(kFs);
+        const auto noise = sine(1000, 48000, 0.1f);
+        g.setMasker(noise.data(), (int)noise.size(), 1.0f, true);
+        g.setMaskerGain(0.316228f); // -10 dB
+        const auto out = render(g, 24000);
+        CHECK_NEAR(20.0 * std::log10(peak(out, 2 * 12000) / 0.1), -10.0, 0.1);
+    }
+
     // 4. Pan: -1 = só esquerda.
     {
         AudioGraph g(kFs);
@@ -112,7 +122,7 @@ int main() {
         const auto tone = sine(1000, 48000, 0.3f);
         g.setTarget(tone.data(), (int)tone.size(), 1.0f);
         g.setMasker(tone.data(), (int)tone.size(), 1.0f, true);
-        g.setNoiseAmplitude(0.1f);
+        g.setMaskerGain(0.5f);
         render(g, 1000);
         g.silenceAll();
         const auto out = render(g, 2000);

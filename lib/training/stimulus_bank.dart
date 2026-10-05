@@ -35,9 +35,16 @@ class MinimalPair {
   final String b;
   final Contrast contrast;
 
-  const MinimalPair(this.a, this.b, this.contrast);
+  /// As duas palavras têm plural regular com "s" (sala → salas): o par vira um conjunto de 4
+  /// opções no Coquetel, cruzando a consoante inicial com o /s/ final.
+  final bool pluralizable;
+
+  const MinimalPair(this.a, this.b, this.contrast, {this.pluralizable = false});
 
   String get id => '$a/$b';
+
+  /// {a, b, as, bs}: as 4 opções só diferem em pistas agudas (chance de 25%).
+  List<String> get quad => [a, b, '${a}s', '${b}s'];
 }
 
 /// Banco de pares do treino de palavras parecidas.
@@ -51,43 +58,43 @@ class StimulusBank {
   static const List<MinimalPair> pairs = [
     // /s/ × /ʃ/
     MinimalPair('são', 'chão', Contrast.sVsSh),
-    MinimalPair('soro', 'choro', Contrast.sVsSh),
+    MinimalPair('soro', 'choro', Contrast.sVsSh, pluralizable: true),
     MinimalPair('seque', 'cheque', Contrast.sVsSh),
     MinimalPair('socar', 'chocar', Contrast.sVsSh),
-    MinimalPair('roça', 'rocha', Contrast.sVsSh),
-    MinimalPair('mansa', 'mancha', Contrast.sVsSh),
+    MinimalPair('roça', 'rocha', Contrast.sVsSh, pluralizable: true),
+    MinimalPair('mansa', 'mancha', Contrast.sVsSh, pluralizable: true),
     MinimalPair('assa', 'acha', Contrast.sVsSh),
     MinimalPair('assado', 'achado', Contrast.sVsSh),
     MinimalPair('seca', 'checa', Contrast.sVsSh),
 
     // /s/ × /f/
-    MinimalPair('sala', 'fala', Contrast.sVsF),
-    MinimalPair('saca', 'faca', Contrast.sVsF),
-    MinimalPair('sino', 'fino', Contrast.sVsF),
-    MinimalPair('soco', 'foco', Contrast.sVsF),
-    MinimalPair('cesta', 'festa', Contrast.sVsF),
-    MinimalPair('sorte', 'forte', Contrast.sVsF),
+    MinimalPair('sala', 'fala', Contrast.sVsF, pluralizable: true),
+    MinimalPair('saca', 'faca', Contrast.sVsF, pluralizable: true),
+    MinimalPair('sino', 'fino', Contrast.sVsF, pluralizable: true),
+    MinimalPair('soco', 'foco', Contrast.sVsF, pluralizable: true),
+    MinimalPair('cesta', 'festa', Contrast.sVsF, pluralizable: true),
+    MinimalPair('sorte', 'forte', Contrast.sVsF, pluralizable: true),
     MinimalPair('sim', 'fim', Contrast.sVsF),
     MinimalPair('sumo', 'fumo', Contrast.sVsF),
     MinimalPair('seio', 'feio', Contrast.sVsF),
     MinimalPair('sede', 'fede', Contrast.sVsF),
 
     // /t/ × /p/
-    MinimalPair('tia', 'pia', Contrast.tVsP),
+    MinimalPair('tia', 'pia', Contrast.tVsP, pluralizable: true),
     MinimalPair('tato', 'pato', Contrast.tVsP),
-    MinimalPair('tinta', 'pinta', Contrast.tVsP),
+    MinimalPair('tinta', 'pinta', Contrast.tVsP, pluralizable: true),
     MinimalPair('tão', 'pão', Contrast.tVsP),
     MinimalPair('tente', 'pente', Contrast.tVsP),
-    MinimalPair('touca', 'pouca', Contrast.tVsP),
+    MinimalPair('touca', 'pouca', Contrast.tVsP, pluralizable: true),
     MinimalPair('tosse', 'posse', Contrast.tVsP),
     MinimalPair('tomba', 'pomba', Contrast.tVsP),
 
     // /t/ × /k/
-    MinimalPair('tola', 'cola', Contrast.tVsK),
-    MinimalPair('tapa', 'capa', Contrast.tVsK),
+    MinimalPair('tola', 'cola', Contrast.tVsK, pluralizable: true),
+    MinimalPair('tapa', 'capa', Contrast.tVsK, pluralizable: true),
     MinimalPair('torre', 'corre', Contrast.tVsK),
-    MinimalPair('toca', 'coca', Contrast.tVsK),
-    MinimalPair('tanto', 'canto', Contrast.tVsK),
+    MinimalPair('toca', 'coca', Contrast.tVsK, pluralizable: true),
+    MinimalPair('tanto', 'canto', Contrast.tVsK, pluralizable: true),
     MinimalPair('tão', 'cão', Contrast.tVsK),
 
     // /s/ final (plural)

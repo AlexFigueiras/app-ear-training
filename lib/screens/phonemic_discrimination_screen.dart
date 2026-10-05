@@ -7,6 +7,7 @@ import '../models/audiogram.dart';
 import '../models/rehab_session.dart';
 import '../services/audio_service_manager.dart';
 import '../services/supabase_service.dart';
+import '../training/adaptive_staircase.dart';
 import '../training/item_selector.dart';
 import 'hearing_test/hearing_test_flow.dart';
 import 'session_summary_screen.dart';
@@ -29,11 +30,12 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
   final SupabaseService _supabase = SupabaseService();
   final GamificationController _gamification = GamificationController();
 
-  int _currentTrial = 0;
-  // 25 tentativas por sessão (provisório: a dose passa a ser por tempo na Etapa 7 do plano)
-  static const int _maxTrials = 25;
+  static const _module = 'phonemic';
+  int _currentTrial = 0; // tentativas respondidas
   int _correctAnswers = 0;
-  final DateTime _sessionStart = DateTime.now();
+  // Sessão de ~10 min (a dose é em minutos acumulados, não em número de tentativas).
+  final SessionClock _clock = SessionClock();
+  bool _finished = false;
 
   Trial? _trial;
   Trial? _upcoming; // próxima tentativa, já baixada enquanto a pessoa responde a atual
@@ -42,10 +44,11 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
   TrialFeedback? _feedback; // retorno da última resposta (achado D3)
   String? _nowPlaying; // o que toca durante "Ouvir as duas"
 
-  // Dificuldade: reforço extra só nas bandas agudas (>= 3 kHz). Provisório: escada 2-abaixo/
-  // 1-acima; a escada definitiva (3-abaixo/1-acima, salva entre sessões) vem na Etapa 7.
-  int _consecutiveCorrect = 0;
-  double _extraBoostDb = 6.0;
+  // Dificuldade: reforço extra só nas bandas agudas (>= 3 kHz); menos reforço = mais difícil.
+  // Escada 3-acertos/1-erro (~79% de acerto), retomada de onde a pessoa parou.
+  late final AdaptiveStaircase _boost = AdaptiveStaircase.resume(
+      _gamification.trainingState(_module), start: 12, minValue: 0, maxValue: 24);
+  double get _extraBoostDb => _boost.value;
 
   final List<Map<String, dynamic>> _sessionLog = [];
 
@@ -85,7 +88,7 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
       );
 
   void _startTrial() {
-    if (_currentTrial >= _maxTrials) {
+    if (_clock.isOver) {
       _finishSession();
       return;
     }
@@ -139,19 +142,9 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
     final presentedBoost = _extraBoostDb;
     _selector.record(trial, correct: isCorrect);
 
-    if (isCorrect) {
-      _correctAnswers++;
-      _consecutiveCorrect++;
-      if (_consecutiveCorrect >= 2) {
-        _consecutiveCorrect = 0;
-        _extraBoostDb = (_extraBoostDb - 3.0).clamp(0.0, 18.0); // mais difícil
-      }
-      HapticFeedback.lightImpact();
-    } else {
-      _consecutiveCorrect = 0;
-      _extraBoostDb = (_extraBoostDb + 3.0).clamp(0.0, 18.0); // mais fácil
-      HapticFeedback.heavyImpact();
-    }
+    _boost.record(correct: isCorrect);
+    if (isCorrect) _correctAnswers++;
+    isCorrect ? HapticFeedback.lightImpact() : HapticFeedback.heavyImpact();
 
     _sessionLog.add({
       'trial': _currentTrial + 1,
@@ -164,6 +157,7 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
       'correct': isCorrect,
       'boost_db': presentedBoost,
     });
+    _currentTrial++;
 
     setState(() {
       _canRespond = false;
@@ -181,7 +175,6 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
     setState(() {
       _feedback = null;
       _nowPlaying = null;
-      _currentTrial++;
     });
     _startTrial();
   }
@@ -211,17 +204,22 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
   }
 
   void _finishSession() async {
-    final duration = DateTime.now().difference(_sessionStart).inMilliseconds;
+    if (_finished) return; // tempo esgotado e "Terminar" ao mesmo tempo
+    _finished = true;
+    final duration = _clock.elapsed.inMilliseconds;
+    _gamification.saveTrainingState(_module, _boost.toJson());
     final session = RehabSession(
       patientId: _audiogram.patientId,
       date: DateTime.now(),
       level: RehabLevel.phonemicDiscrimination,
-      totalTrials: _maxTrials,
+      totalTrials: _currentTrial,
       correctAnswers: _correctAnswers,
-      averageResponseTimeMs: duration / _maxTrials,
+      averageResponseTimeMs: _currentTrial == 0 ? 0 : duration / _currentTrial,
       metadata: {
         'log': _sessionLog,
         'final_boost_db': _extraBoostDb,
+        'boost_threshold_db': _boost.threshold,
+        'staircase': '3-down-1-up',
         'stimulus_bank_version': 2,
       },
     );
@@ -242,14 +240,14 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
       }
     }
     if (!mounted) return;
-    // Nível de dificuldade em linguagem comum: reforço 18 dB = nível 1 ... 0 dB = nível 7.
-    final level = 1 + ((18 - _extraBoostDb) / 3).round();
+    // Nível de dificuldade em linguagem comum: reforço 24 dB = nível 1 ... 0 dB = nível 7.
+    final level = (1 + ((24 - (_boost.threshold ?? _extraBoostDb)) / 4).round()).clamp(1, 7);
     SessionSummaryScreen.replaceCurrent(
       context,
       SessionSummary(
             training: 'Palavras parecidas',
             correct: _correctAnswers,
-            total: _maxTrials,
+            total: _currentTrial,
             duration: Duration(milliseconds: duration),
             levelLine: 'Nível de dificuldade alcançado: $level de 7',
       ),
@@ -264,10 +262,17 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         title: const Text("Palavras parecidas", style: TextStyle(fontSize: 18)),
+        actions: [
+          if (_currentTrial > 0)
+            TextButton(
+              onPressed: _isPlaying ? null : _finishSession,
+              child: const Text('Terminar', style: TextStyle(fontSize: 16)),
+            ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(4),
           child: LinearProgressIndicator(
-            value: _currentTrial / _maxTrials,
+            value: _clock.progress,
             backgroundColor: Colors.white10,
             valueColor: const AlwaysStoppedAnimation<Color>(Colors.greenAccent),
           ),
@@ -279,7 +284,7 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
           child: Column(
             children: [
               Text(
-                "Palavra ${(_currentTrial + 1).clamp(1, _maxTrials)} de $_maxTrials",
+                "Palavra ${_currentTrial + (_feedback == null ? 1 : 0)} · faltam cerca de ${_clock.minutesLeft} min",
                 style: const TextStyle(color: Colors.white70, fontSize: 16),
               ),
               const SizedBox(height: 24),

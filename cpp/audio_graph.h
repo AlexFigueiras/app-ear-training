@@ -1,7 +1,6 @@
 #pragma once
 #include <atomic>
 #include <cstdint>
-#include <random>
 #include "buffer_source.h"
 #include "eq_bank.h"
 #include "handoff.h"
@@ -10,8 +9,7 @@
 // Mixer do BOSYN, sem dependência do Oboe (testável no host, ver cpp/tests/).
 //
 //   alvo (palavra/tom) -> EQ por orelha (ou bypass) -> pan --+
-//   masker (amostra em loop) --------------------------------+--> limitador -1 dBFS -> saída
-//   ruído branco (provisório, sai na Etapa 7) ---------------+
+//   masker (ruído de fala / burburinho, em loop) -------------+--> limitador -1 dBFS -> saída
 //
 // O ruído entra DEPOIS do EQ: o SNR pedido é o SNR entregue. Tons de medição usam bypass:
 // medir limiar através de processamento invalida o audiograma.
@@ -25,7 +23,6 @@ public:
     void setTarget(const float* data, int frames, float gain) { target_.set(data, frames, 1, gain, false); }
     void setMasker(const float* data, int frames, float gain, bool loop) { masker_.set(data, frames, 1, gain, loop); }
     void setMaskerGain(float linear) { masker_.setGain(linear); }
-    void setNoiseAmplitude(float amplitude) { noiseAmplitude_.store(amplitude, std::memory_order_release); }
     void setPanning(float panning) { panning_.store(panning, std::memory_order_release); }
     void setBypass(bool bypass) { bypass_.store(bypass, std::memory_order_release); }
     void setEqTargets(const float* leftDb, const float* rightDb);
@@ -50,13 +47,11 @@ private:
     EqState eqState_;
     SafetyLimiter limiter_;
 
-    std::atomic<float> noiseAmplitude_{0.0f};
     std::atomic<float> panning_{0.0f};
     std::atomic<bool> bypass_{false};
     std::atomic<int64_t> onsetNs_{0};
 
     // Estado só da thread de áudio.
-    std::minstd_rand noiseEngine_{12345u};
     bool targetWasActive_ = false;
     float targetL_[kBlock], targetR_[kBlock], maskerL_[kBlock], maskerR_[kBlock];
 };

@@ -34,8 +34,7 @@ class SignalLevel {
     return out;
   }
 
-  /// Amplitude do ruído branco uniforme ([-a, a], RMS = a/√3) para obter [snrDb] contra uma fala
-  /// de RMS [speech]. Provisório: a Etapa 7 troca o ruído branco por ruído de fala.
-  static double whiteNoiseAmplitudeForSnr(double snrDb, {double speech = speechRms}) =>
-      math.sqrt(3) * speech * math.pow(10, -snrDb / 20);
+  /// Ganho linear do ruído para obter [snrDb]: fala e ruído saem com o mesmo RMS
+  /// ([speechRms]), então SNR = -20·log10(ganho). Vale abaixo de 0 dB (ruído mais alto que a fala).
+  static double maskerGainForSnr(double snrDb) => math.pow(10, -snrDb / 20).toDouble();
 }

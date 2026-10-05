@@ -80,6 +80,34 @@ class ItemSelector {
     );
   }
 
+  /// Coquetel: 4 opções {a, b, as, bs} (chance de 25%), tocando qualquer uma. Cai para 2 opções
+  /// se o /s/ final for inaudível ou não houver par com plural audível.
+  Trial nextQuad() {
+    if (inaudible.contains(Contrast.finalS)) return next();
+    final eligible = {
+      for (final p in StimulusBank.pairs)
+        if (p.pluralizable && !inaudible.contains(p.contrast)) p.contrast,
+    };
+    if (eligible.isEmpty) return next();
+    final contrast = _pickContrast(only: eligible);
+    final all = StimulusBank.of(contrast).where((p) => p.pluralizable).toList();
+    final fresh = all.where((p) => !_recentPairs.contains(p.id)).toList();
+    final pool = fresh.isNotEmpty ? fresh : all;
+    final pair = pool[_random.nextInt(pool.length)];
+
+    _recentPairs.add(pair.id);
+    if (_recentPairs.length > recentWindow) _recentPairs.removeAt(0);
+    _served++;
+
+    final options = pair.quad..shuffle(_random);
+    return Trial(
+      pair: pair,
+      played: options[_random.nextInt(options.length)],
+      voice: StimulusBank.voices[_random.nextInt(StimulusBank.voices.length)],
+      options: options,
+    );
+  }
+
   /// Erro aumenta o peso do contraste; acerto o reduz aos poucos.
   void record(Trial trial, {required bool correct}) {
     final c = trial.pair.contrast;
@@ -102,10 +130,10 @@ class ItemSelector {
     return values.isEmpty ? null : values.reduce(math.min);
   }
 
-  Contrast _pickContrast() {
+  Contrast _pickContrast({Set<Contrast>? only}) {
     final options = [
       for (final c in Contrast.values)
-        if (c.isHighFrequency && !inaudible.contains(c)) c,
+        if (c.isHighFrequency && !inaudible.contains(c) && (only == null || only.contains(c))) c,
     ];
     final weights = [for (final c in options) weightOf(c)];
     final total = weights.reduce((a, b) => a + b);

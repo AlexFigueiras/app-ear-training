@@ -89,10 +89,6 @@ NATIVE_EXPORT void set_masker_gain(EngineContext* ctx, float linear) {
     if (auto* g = graphOf(ctx)) g->setMaskerGain(linear);
 }
 
-NATIVE_EXPORT void set_noise_intensity(EngineContext* ctx, float intensity) {
-    if (auto* g = graphOf(ctx)) g->setNoiseAmplitude(intensity);
-}
-
 NATIVE_EXPORT void set_target_panning(EngineContext* ctx, float panning) {
     if (auto* g = graphOf(ctx)) g->setPanning(panning);
 }

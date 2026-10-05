@@ -44,7 +44,6 @@ class NativeDSPBridge implements ffi.Finalizable {
   late final _setTarget = _lib.lookupFunction<_SampleC, _Sample>('set_target_sample');
   late final _setNoiseSample = _lib.lookupFunction<_SampleC, _Sample>('set_noise_sample');
   late final _setMaskerGain = _lib.lookupFunction<_CtxFloatC, _CtxFloat>('set_masker_gain');
-  late final _setNoiseIntensity = _lib.lookupFunction<_CtxFloatC, _CtxFloat>('set_noise_intensity');
   late final _setPanning = _lib.lookupFunction<_CtxFloatC, _CtxFloat>('set_target_panning');
   late final _silenceAll = _lib.lookupFunction<_CtxVoidC, _CtxVoid>('silence_all');
   late final _setEqTargets = _lib.lookupFunction<_EqC, _Eq>('set_eq_targets');
@@ -92,7 +91,6 @@ class NativeDSPBridge implements ffi.Finalizable {
       _setNoiseSample(_ctx, data, length, volume, loop ? 1 : 0);
 
   void setMaskerGain(double linear) => _setMaskerGain(_ctx, linear);
-  void setNoiseIntensity(double intensity) => _setNoiseIntensity(_ctx, intensity);
   void setTargetPanning(double panning) => _setPanning(_ctx, panning);
   void silenceAll() => _silenceAll(_ctx);
 

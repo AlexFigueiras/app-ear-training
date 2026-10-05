@@ -14,7 +14,6 @@ void AudioGraph::setEqTargets(const float* leftDb, const float* rightDb) {
 void AudioGraph::silenceAll() {
     target_.stop();
     masker_.stop();
-    noiseAmplitude_.store(0.0f, std::memory_order_release);
 }
 
 int64_t AudioGraph::nowNs() {
@@ -38,9 +37,6 @@ void AudioGraph::renderBlock(float* out, int frames) {
     const float pan = panning_.load(std::memory_order_acquire);
     const float panL = pan <= 0.0f ? 1.0f : 1.0f - pan;
     const float panR = pan >= 0.0f ? 1.0f : 1.0f + pan;
-    const float noise = noiseAmplitude_.load(std::memory_order_acquire);
-    // Ruído branco uniforme em [-1, 1] sem alocação (minstd_rand é um inteiro de estado).
-    const float noiseScale = 2.0f / (float)std::minstd_rand::max();
 
     // Tempo de reação: marca o instante em que o alvo começa a soar.
     if (targetActive && !targetWasActive_) onsetNs_.store(nowNs(), std::memory_order_release);
@@ -55,11 +51,6 @@ void AudioGraph::renderBlock(float* out, int frames) {
         }
         l = l * panL + maskerL_[i];
         r = r * panR + maskerR_[i];
-        if (noise > 0.0f) {
-            const float n = noise * ((float)noiseEngine_() * noiseScale - 1.0f);
-            l += n;
-            r += n;
-        }
         limiter_.process(l, r);
         out[2 * i] = l;
         out[2 * i + 1] = r;

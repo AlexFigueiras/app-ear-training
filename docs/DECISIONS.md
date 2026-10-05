@@ -1,6 +1,49 @@
 # DECISIONS — histórico vivo de decisões
 > Entradas no topo (mais recente primeiro). Estado do que existe fica em `docs/STATUS.md`.
 
+## [2026-10-04] Plano "treino eficaz" — Etapa 7 (dificuldade real + Coquetel de verdade)
+- **Status:** accepted (aguardando CI + checklist no celular)
+- **Contexto:**
+  - A escada do Coquetel (1-acima/1-abaixo, com 2 opções) convergia para 50% = chute.
+  - A da Fonêmica (2-abaixo/1-acima) era provisória.
+  - As duas recomeçavam do zero a cada sessão.
+  - O ruído era branco (mascara demais os agudos e não parece ambiente real), com rótulos
+    "RESTAURANTE/TRÁFEGO/VENTO" falsos.
+  - A dose era em número de tentativas (~2–3 min).
+- **Decisões:**
+  - **Escada** (`lib/training/adaptive_staircase.dart`): 3-acertos/1-erro (Levitt 1971 →
+    ~79,4%).
+    - Passo de 4 dB até 2 reversões, depois 2 dB.
+    - Limiar = média das últimas 6 reversões.
+    - Salva por treino em `profiles.gamification_data.training_state` (jsonb, sem migration),
+      e a próxima sessão retoma 4 dB mais fácil.
+    - Fonêmica: reforço agudo de 0 a 24 dB. Coquetel: SNR de -15 a +20 dB.
+  - **Ruído de fundo** (`lib/audio_engine/masker_bank.dart`), em loop contínuo pela segunda
+    fonte nativa (masker), com emenda cruzada de 50 ms:
+    - ruído com espectro de fala (aproximação da LTASS);
+    - burburinho de 6 falantes (6 frases em 3 vozes do TTS).
+    - Burburinho a partir do nível 5 de ruído; sem rede, cai para o ruído de fala.
+    - Fala e ruído saem com o mesmo RMS (-30 dBFS), então o SNR é só o ganho do masker
+      (`SignalLevel.maskerGainForSnr`), exato inclusive abaixo de 0 dB.
+    - O gerador de ruído branco saiu do C++ e da ponte FFI.
+  - **Coquetel com 4 opções** `{sala, fala, salas, falas}` (pares com plural regular marcados no
+    banco): consoante inicial × /s/ final, chance de 25%, sem opção "fácil de descartar". Com
+    o /s/ final inaudível, volta para 2 opções.
+  - **Frase-veículo** "Diga ___ agora.", mais próxima de fala corrida.
+  - **Sessão por tempo:** ~10 min (`SessionClock`), com botão "Terminar" e "faltam cerca de N
+    min". Sem punição por erro.
+- **Verificação:**
+  - Simulação local (2000 execuções): a escada converge a 0,1–0,15 dB do ponto de 79,4%, com 2
+    e 4 opções.
+  - `test/adaptive_staircase_test.dart`, `masker_bank_test.dart` (RMS, espectro de fala caindo
+    > 12 dB entre 500 Hz e 4 kHz, emenda de loop, burburinho) e o teste de 4 opções em
+    `item_selector_test.dart` rodaram localmente com `dart`.
+  - `graph_test.cpp` ganhou o teste do ganho do masker (-10 dB = -10 dB na saída).
+  - O teste local pegou dois erros: "faltam 11 min" no início (arredondamento) e
+    `toMapForSupabase` devolvendo a referência do mapa interno (o logout esvaziava o estado
+    salvo). Os dois foram corrigidos.
+- **Pendente:** ouvir no celular se o burburinho soa natural e se a emenda do loop é inaudível.
+
 ## [2026-10-04] Plano "treino eficaz" — Etapa 6 (feedback e fim de sessão)
 - **Status:** accepted (aguardando CI + checklist no celular)
 - **Contexto (achados D3, parte de E1 e D5 da auditoria de UX; análise do treino):**

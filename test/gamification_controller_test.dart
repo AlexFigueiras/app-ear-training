@@ -19,4 +19,16 @@ void main() {
     expect(controller.acuityLevel, 'INITIAL');
     expect(controller.currentSNR, 20.0);
   });
+
+  test('estado das escadas é salvo, restaurado e zerado no logout', () {
+    controller.saveTrainingState('cocktail', {'value': -2.0, 'threshold': -1.5});
+    final saved = controller.toMapForSupabase();
+    controller.resetForNewUser();
+    expect(controller.trainingState('cocktail'), isNull);
+    controller.fromMap(saved);
+    expect(controller.trainingState('cocktail')!['value'], -2.0);
+    // Dado antigo com energia neural continua sendo lido sem erro.
+    controller.fromMap({'total_xp': 10, 'neural_energy': 3});
+    expect(controller.totalXP, 10);
+  });
 }

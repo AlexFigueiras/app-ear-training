@@ -34,8 +34,8 @@ checklist de escuta no celular (APK de profile). Análise e porquês em `docs/DE
 | 3 — Motor C++ consertado (EQ multibanda, bypass de medição, limitador) | 🟡 | CI verde (run 37241421987, inclui TSan). Checklist no celular adiado pelo usuário |
 | 4 — Teste auditivo confiável | 🟡 | CI verde (run 37243740170). Checklist no celular adiado pelo usuário. Home e onboarding abrem o teste novo (commit 66031f6, auditoria de UX) |
 | 5 — Banco de estímulos que obriga a ouvir | 🟡 | CI verde (run 37244933547). Checklist no celular adiado pelo usuário |
-| 6 — Feedback e fim de sessão | 🟡 | Código pronto (achados D3, parte de E1 e D5); aguardando CI e checklist |
-| 7 — Dificuldade real + Coquetel com ruído de fala | ⬜ | |
+| 6 — Feedback e fim de sessão | 🟡 | CI verde (run 37247213640). Checklist no celular adiado pelo usuário |
+| 7 — Dificuldade real + Coquetel com ruído de fala | 🟡 | Código pronto; aguardando CI e checklist |
 | 8 — Medida de progresso (dígitos no ruído) | ⬜ | |
 | 9 — Espacial redesenhado | ⬜ | |
 | 10 — Gamificação alinhada ao treino | ⬜ | |
@@ -55,7 +55,7 @@ checklist de escuta no celular (APK de profile). Análise e porquês em `docs/DE
 | Teste auditivo (limiar tonal) | 🟡 | `lib/screens/threshold_test_screen.dart`, `lib/screens/hearing_test/`, `lib/training/threshold_procedure.dart`, `hearing_test_session.dart`, `hearing_summary.dart`, `lib/services/audio_output_service.dart` | Etapa 4: Hughson-Westlake modificado com tentativas silenciosas (2 de verificação antes de aceitar), "sem resposta" no máximo, 250 Hz–8 kHz com 3/6 k e reteste de 1 k, tom pulsado sem processamento, fone e volume fixo checados, resultado rolável com audiograma clínico, categoria OMS aproximada e próximo passo. **Triagem relativa, não dB HL clínico.** Precisão em simulação: ~80% a ±5 dB, ~100% a ±10 dB |
 | Discriminação fonêmica ("Palavras parecidas") | 🟡 | `lib/screens/phonemic_discrimination_screen.dart`, `lib/training/stimulus_bank.dart`, `lib/training/item_selector.dart` | Etapa 5: 49 pares de palavras reais (s×ch, s×f, t×p, t×k, plural, + aquecimento grave); qualquer palavra do par toca; 3 vozes; seleção por perda e erros recentes; guarda de audibilidade. Feedback e resumo vêm na Etapa 6; escada definitiva na Etapa 7 |
 | Atenção espacial | 🟡 | `lib/screens/spatial_attention_screen.dart` | Existe; monaural e sem adaptação — redesenho na Etapa 9 |
-| Fala no ruído (Speech-in-Noise) | 🟡 | `lib/screens/speech_in_noise_screen.dart` | Existe |
+| Fala no ruído ("Conversa no barulho") | 🟡 | `lib/screens/speech_in_noise_screen.dart`, `lib/audio_engine/masker_bank.dart`, `lib/training/adaptive_staircase.dart` | Etapa 7: ruído contínuo com espectro de fala ou burburinho de 6 vozes (SNR exato, mesmo RMS da fala), 4 opções {sala, fala, salas, falas}, frase "Diga ___ agora", escada 3-acertos/1-erro retomada entre sessões, sessão de ~10 min com "Terminar" |
 | Gamificação (XP / Streak) | 🟡 | `lib/core/gamification_controller.dart` | Energia Neural removida na Etapa 6 (punia o erro que a escada produz de propósito). XP/nível/streak ainda os antigos — reescritos na Etapa 10 |
 | Relatório clínico / missão | 🚫 | — | Removido na Etapa 1 (código órfão; o PDF "clínico" tinha números inventados). Resumo de sessão honesto vem na Etapa 6 |
 | Painel técnico + QA de áudio (oculto, long-press no topo da Home) | 🟡 | `lib/screens/widgets/technical_dashboard.dart`, `qa_audio_panel.dart` | Carga do DSP, xruns, acionamentos do limitador; em debug/profile: tons por orelha e palavra com/sem EQ (Etapa 3) |

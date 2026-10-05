@@ -71,12 +71,11 @@ void main() {
     expect(SignalLevel.rms(normalized), closeTo(SignalLevel.speechRms, 1e-6));
     expect(SignalLevel.rms(word), closeTo(0.4 / math.sqrt2, 1e-3)); // original intacto
 
-    // Ruído uniforme [-a, a] tem RMS a/√3: em SNR 0 dB, o RMS do ruído = RMS da fala.
-    final a0 = SignalLevel.whiteNoiseAmplitudeForSnr(0);
-    expect(a0 / math.sqrt(3), closeTo(SignalLevel.speechRms, 1e-9));
-    // -10 dB: ruído 10 dB acima da fala (antes ficava travado igual a 0 dB).
-    final a10 = SignalLevel.whiteNoiseAmplitudeForSnr(-10);
-    expect(20 * math.log(a10 / a0) / math.ln10, closeTo(10, 1e-9));
+    // Fala e ruído têm o mesmo RMS: SNR 0 dB = ganho 1; -10 dB = ruído 10 dB acima da fala
+    // (antes travava igual a 0 dB).
+    expect(SignalLevel.maskerGainForSnr(0), closeTo(1.0, 1e-12));
+    expect(20 * math.log(SignalLevel.maskerGainForSnr(-10)) / math.ln10, closeTo(10, 1e-9));
+    expect(20 * math.log(SignalLevel.maskerGainForSnr(6)) / math.ln10, closeTo(-6, 1e-9));
     expect(SignalLevel.normalizeRms(Float32List(10)).every((s) => s == 0), isTrue);
   });
 }

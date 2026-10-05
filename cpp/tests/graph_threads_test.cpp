@@ -17,7 +17,7 @@ int main() {
             graph.setTarget(tone.data(), (int)tone.size(), 1.0f);
             if (round % 4 == 0) graph.setMasker(tone.data(), (int)tone.size(), 0.3f, true);
             if (round % 5 == 0) graph.setMaskerGain(0.1f * (float)(round % 10));
-            if (round % 9 == 0) graph.setNoiseAmplitude(0.01f * (float)(round % 3));
+            if (round % 9 == 0) graph.setMaskerGain(0.1f * (float)(round % 3));
             if (round % 11 == 0) graph.setPanning(round % 2 ? -0.5f : 0.5f);
             if (round % 13 == 0) graph.setBypass(round % 2 == 0);
             if (round % 101 == 0) {
