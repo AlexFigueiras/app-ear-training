@@ -9,7 +9,9 @@ import '../services/audio_service_manager.dart';
 import '../services/supabase_service.dart';
 import '../training/item_selector.dart';
 import 'hearing_test/hearing_test_flow.dart';
+import 'session_summary_screen.dart';
 import 'widgets/phonemic_widgets.dart';
+import 'widgets/trial_feedback.dart';
 
 /// Treino "Palavras parecidas" (discriminação de pares mínimos).
 class PhonemicDiscriminationScreen extends StatefulWidget {
@@ -37,6 +39,8 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
   Trial? _upcoming; // próxima tentativa, já baixada enquanto a pessoa responde a atual
   bool _canRespond = false;
   bool _isPlaying = false;
+  TrialFeedback? _feedback; // retorno da última resposta (achado D3)
+  String? _nowPlaying; // o que toca durante "Ouvir as duas"
 
   // Dificuldade: reforço extra só nas bandas agudas (>= 3 kHz). Provisório: escada 2-abaixo/
   // 1-acima; a escada definitiva (3-abaixo/1-acima, salva entre sessões) vem na Etapa 7.
@@ -50,7 +54,6 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
     super.initState();
     _audiogram = widget.audiogram;
     _selector = ItemSelector(audiogram: _audiogram);
-    _gamification.resetEnergyForNewSession();
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
   }
 
@@ -147,7 +150,6 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
     } else {
       _consecutiveCorrect = 0;
       _extraBoostDb = (_extraBoostDb + 3.0).clamp(0.0, 18.0); // mais fácil
-      _gamification.consumeEnergy();
       HapticFeedback.heavyImpact();
     }
 
@@ -163,8 +165,49 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
       'boost_db': presentedBoost,
     });
 
-    setState(() => _currentTrial++);
+    setState(() {
+      _canRespond = false;
+      _feedback = TrialFeedback(correct: isCorrect, correctAnswer: trial.played, selected: selected);
+    });
+    // Acerto: avança sozinho. Erro: espera "Continuar", para dar tempo de comparar.
+    if (isCorrect) {
+      Future.delayed(const Duration(milliseconds: 1100), () {
+        if (mounted && _feedback != null) _advance();
+      });
+    }
+  }
+
+  void _advance() {
+    setState(() {
+      _feedback = null;
+      _nowPlaying = null;
+      _currentTrial++;
+    });
     _startTrial();
+  }
+
+  /// Feedback contrastivo: toca a certa e depois a que a pessoa marcou, na mesma voz.
+  Future<void> _listenBoth() async {
+    final trial = _trial;
+    final feedback = _feedback;
+    if (trial == null || feedback == null || _isPlaying) return;
+    setState(() => _isPlaying = true);
+    try {
+      for (final (label, word) in [('Certa', trial.played), ('Marcada', feedback.selected)]) {
+        if (!mounted) return;
+        setState(() => _nowPlaying = '$label: "$word"');
+        final duration = await _engine.playPhonemicStimulus(
+          text: word,
+          voice: trial.voice,
+          freqBand: trial.pair.contrast.cueBandHz.toDouble(),
+          extraBoostDb: _extraBoostDb,
+        );
+        await Future.delayed(duration + const Duration(milliseconds: 500));
+      }
+    } catch (_) {
+      // Sem rede: o retorno visual continua valendo.
+    }
+    if (mounted) setState(() => _isPlaying = false);
   }
 
   void _finishSession() async {
@@ -193,13 +236,24 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
       if (user != null) {
         await _supabase.saveGamificationData(_gamification.toMapForSupabase());
       }
-      if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro ao salvar sessão: $e")));
-        if (mounted) Navigator.pop(context);
       }
     }
+    if (!mounted) return;
+    // Nível de dificuldade em linguagem comum: reforço 18 dB = nível 1 ... 0 dB = nível 7.
+    final level = 1 + ((18 - _extraBoostDb) / 3).round();
+    SessionSummaryScreen.replaceCurrent(
+      context,
+      SessionSummary(
+            training: 'Palavras parecidas',
+            correct: _correctAnswers,
+            total: _maxTrials,
+            duration: Duration(milliseconds: duration),
+            levelLine: 'Nível de dificuldade alcançado: $level de 7',
+      ),
+    );
   }
 
   @override
@@ -244,11 +298,20 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
                   spacing: 24,
                   runSpacing: 16,
                   children: [
-                    for (final opt in options) AnimatedOptionCard(label: opt, onTap: () => _handleResponse(opt)),
+                    for (final opt in options)
+                      AnimatedOptionCard(label: opt, onTap: () => _handleResponse(opt), highlight: feedbackHighlight(_feedback, opt)),
                   ],
                 ),
               ),
-              const SizedBox(height: 48),
+              const SizedBox(height: 24),
+              if (_feedback != null)
+                FeedbackBanner(
+                  feedback: _feedback!,
+                  nowPlaying: _nowPlaying,
+                  onListenBoth: _feedback!.correct ? null : _listenBoth,
+                  onContinue: _feedback!.correct || _isPlaying ? null : _advance,
+                ),
+              const SizedBox(height: 24),
               TextButton.icon(
                 onPressed: _isPlaying ? null : _playTarget,
                 icon: const Icon(Icons.refresh, size: 28),

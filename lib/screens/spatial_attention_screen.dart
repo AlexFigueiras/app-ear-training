@@ -9,6 +9,8 @@ import '../models/rehab_session.dart';
 import '../services/audio_service_manager.dart';
 import '../training/item_selector.dart';
 import 'hearing_test/hearing_test_flow.dart';
+import 'session_summary_screen.dart';
+import 'widgets/trial_feedback.dart';
 import '../services/supabase_service.dart';
 
 enum SpatialDirection { left, center, right }
@@ -37,13 +39,13 @@ class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
   SpatialDirection? _targetDirection;
   bool _canRespond = false;
   bool _isPlaying = false;
+  TrialFeedback? _feedback;
 
   @override
   void initState() {
     super.initState();
     _audiogram = widget.audiogram;
     _selector = ItemSelector(audiogram: _audiogram, warmUpTrials: 0);
-    _gamification.resetEnergyForNewSession();
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
   }
 
@@ -113,11 +115,36 @@ class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
       _correctAnswers++;
       HapticFeedback.lightImpact();
     } else {
-      _gamification.consumeEnergy();
       HapticFeedback.heavyImpact();
     }
 
-    setState(() => _currentTrial++);
+    // Retorno por tentativa (achado D3): de onde o som veio de verdade.
+    setState(() {
+      _canRespond = false;
+      _feedback = TrialFeedback(
+        correct: isCorrect,
+        correctAnswer: _directionLabel(_targetDirection!),
+        selected: _directionLabel(selected),
+      );
+    });
+    if (isCorrect) {
+      Future.delayed(const Duration(milliseconds: 1100), () {
+        if (mounted && _feedback != null) _advance();
+      });
+    }
+  }
+
+  static String _directionLabel(SpatialDirection d) => switch (d) {
+        SpatialDirection.left => 'esquerda',
+        SpatialDirection.center => 'centro',
+        SpatialDirection.right => 'direita',
+      };
+
+  void _advance() {
+    setState(() {
+      _feedback = null;
+      _currentTrial++;
+    });
     _startTrial();
   }
 
@@ -142,33 +169,21 @@ class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
       if (user != null) {
         await _supabase.saveGamificationData(_gamification.toMapForSupabase());
       }
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            backgroundColor: const Color(0xFF1E1E24),
-            title: const Text("Treino Espacial Concluído", style: TextStyle(color: Colors.white)),
-            content: Text(
-              "Acertos: $_correctAnswers / $_maxTrials\nPrecisão: ${session.accuracy.toStringAsFixed(1)}%",
-              style: const TextStyle(color: Colors.white70),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("OK", style: TextStyle(color: Color(0xFF00FF41))),
-              ),
-            ],
-          ),
-        ).then((_) {
-          if (mounted) Navigator.pop(context);
-        });
-      }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: $e")));
-        if (mounted) Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro ao salvar sessão: $e")));
       }
     }
+    if (!mounted) return;
+    SessionSummaryScreen.replaceCurrent(
+      context,
+      SessionSummary(
+            training: 'De onde vem o som',
+            correct: _correctAnswers,
+            total: _maxTrials,
+            duration: Duration(milliseconds: duration),
+      ),
+    );
   }
 
   @override
@@ -177,7 +192,7 @@ class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
       backgroundColor: const Color(0xFF0D0D0F),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        title: const Text("NÍVEL 3: ATENÇÃO ESPACIAL"),
+        title: const Text("De onde vem o som", style: TextStyle(fontSize: 18)),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(4),
           child: LinearProgressIndicator(
@@ -187,8 +202,9 @@ class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
           ),
         ),
       ),
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(vertical: 32),
+        child: Column(
         children: [
           const Text(
             "De onde veio o som?",
@@ -196,8 +212,8 @@ class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            "Palavra ${(_currentTrial + 1).clamp(1, _maxTrials)} de $_maxTrials",
-            style: const TextStyle(color: Colors.white38, fontSize: 11, fontFamily: 'monospace'),
+            "Som ${(_currentTrial + 1).clamp(1, _maxTrials)} de $_maxTrials",
+            style: const TextStyle(color: Colors.white70, fontSize: 16),
           ),
           const SizedBox(height: 48),
           const Icon(Icons.headset, size: 100, color: Colors.blueAccent),
@@ -225,6 +241,10 @@ class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
             ],
           ),
           const SizedBox(height: 40),
+          if (_feedback != null) ...[
+            const SizedBox(height: 24),
+            FeedbackBanner(feedback: _feedback!, onContinue: _feedback!.correct ? null : _advance),
+          ],
           TextButton.icon(
             onPressed: _isPlaying ? null : _playSpatialSound,
             icon: const Icon(Icons.refresh, size: 16),
@@ -232,6 +252,7 @@ class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
             style: TextButton.styleFrom(foregroundColor: Colors.white38),
           ),
         ],
+        ),
       ),
     );
   }

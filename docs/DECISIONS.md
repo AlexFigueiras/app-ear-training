@@ -1,6 +1,45 @@
 # DECISIONS — histórico vivo de decisões
 > Entradas no topo (mais recente primeiro). Estado do que existe fica em `docs/STATUS.md`.
 
+## [2026-10-04] Plano "treino eficaz" — Etapa 6 (feedback e fim de sessão)
+- **Status:** accepted (aguardando CI + checklist no celular)
+- **Contexto (achados D3, parte de E1 e D5 da auditoria de UX; análise do treino):**
+  - O único retorno por tentativa era uma vibração: o paciente não sabia qual palavra era a
+    certa nem podia comparar. Feedback contrastivo é um dos fatores ligados ao aprendizado
+    perceptual.
+  - "Palavras parecidas" e "Conversa no barulho" voltavam para a Home sem resumo; o Espacial
+    tinha um diálogo próprio.
+  - A Energia Neural tirava uma "vida" a cada erro, mas a escada adaptativa erra de propósito
+    ~20–30% das vezes: era punição sem efeito clínico.
+- **Decisões:**
+  - **Retorno por tentativa** (`lib/screens/widgets/trial_feedback.dart`):
+    - ✓/✗ grande, com a resposta certa e a marcada; contraste AA; `liveRegion` para leitor de
+      tela;
+    - a opção certa fica com borda verde e a marcada errada, vermelha;
+    - no acerto, avança sozinho em ~1 s;
+    - no erro, espera "Continuar" e oferece "Ouvir as duas" (toca a certa e depois a marcada,
+      na mesma voz; no Coquetel, no mesmo nível de ruído);
+    - o Espacial mostra de onde o som veio.
+  - **Resumo ao fim de todos os treinos** (`lib/screens/session_summary_screen.dart`):
+    - acertos e %, tempo de treino e nível alcançado em linguagem comum (dificuldade 1–7 na
+      Fonêmica, ruído 1–10 no Coquetel);
+    - frase explicando que errar faz parte;
+    - substitui o `pop` direto e o diálogo do Espacial.
+  - **Energia Neural removida** do controlador e das telas. Os dados antigos com `neural_energy`
+    são lidos e ignorados. O limite de sessão por tempo vem na Etapa 7.
+  - **Jargão (D5):**
+    - títulos "Conversa no barulho" e "De onde vem o som";
+    - "Som x de y" no Espacial (o contador já não passa do total: "Trial 21 / 20");
+    - "Nível de ruído x de 10" no lugar de "SNR ADAPTATIVO … dB"
+      (`lib/screens/widgets/noise_level_header.dart`).
+  - **Layout:** Coquetel e Espacial passam a rolar (sem `Spacer`), para a faixa de retorno caber
+    em 360×640.
+- **Verificação:** `test/trial_feedback_test.dart` (erro com "Ouvir as duas"/"Continuar", acerto
+  sem botões, destaque, resumo com volta ao início, nível de ruído), rodando no CI.
+  `flutter analyze` limpo e todas as telas de treino abaixo de 300 linhas líquidas.
+- **Pendente:** "minutos de hoje" no resumo e a meta diária em minutos vêm com a gamificação nova
+  (Etapa 10).
+
 ## [2026-10-04] Plano "treino eficaz" — Etapa 5 (banco de estímulos que obriga a ouvir)
 - **Status:** accepted (aguardando CI + checklist no celular)
 - **Contexto (achado D1 da auditoria de UX + análise do treino):**

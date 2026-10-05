@@ -18,6 +18,5 @@ void main() {
     expect(controller.sessionsCompletedToday, 0);
     expect(controller.acuityLevel, 'INITIAL');
     expect(controller.currentSNR, 20.0);
-    expect(controller.neuralEnergy, 5);
   });
 }

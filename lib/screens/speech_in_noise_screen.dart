@@ -9,6 +9,9 @@ import '../models/rehab_session.dart';
 import '../services/audio_service_manager.dart';
 import '../training/item_selector.dart';
 import 'hearing_test/hearing_test_flow.dart';
+import 'session_summary_screen.dart';
+import 'widgets/noise_level_header.dart';
+import 'widgets/trial_feedback.dart';
 import '../services/supabase_service.dart';
 
 class SpeechInNoiseScreen extends StatefulWidget {
@@ -39,6 +42,8 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
   List<String> get _options => _trial?.options ?? const [];
   bool _canRespond = false;
   bool _isPlaying = false;
+  TrialFeedback? _feedback; // retorno da última resposta (achado D3)
+  String? _nowPlaying;
 
   static const List<String> _noiseEnvironments = ['RESTAURANTE', 'TRÁFEGO', 'VENTO'];
   String _currentEnvironment = 'RESTAURANTE';
@@ -50,7 +55,6 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
     super.initState();
     _audiogram = widget.audiogram;
     _selector = ItemSelector(audiogram: _audiogram, warmUpTrials: 0);
-    _gamification.resetEnergyForNewSession();
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
   }
 
@@ -130,7 +134,6 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
     } else {
       // Erro → facilita SNR para manter motivação e aprendizado
       _currentSnr = (_currentSnr + 2.0).clamp(-10.0, 20.0);
-      _gamification.consumeEnergy();
       HapticFeedback.heavyImpact();
     }
 
@@ -146,8 +149,48 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
       'correct': isCorrect,
     });
 
-    setState(() => _currentTrial++);
+    setState(() {
+      _canRespond = false;
+      _feedback = TrialFeedback(correct: isCorrect, correctAnswer: trial.played, selected: selected);
+    });
+    if (isCorrect) {
+      Future.delayed(const Duration(milliseconds: 1100), () {
+        if (mounted && _feedback != null) _advance();
+      });
+    }
+  }
+
+  void _advance() {
+    setState(() {
+      _feedback = null;
+      _nowPlaying = null;
+      _currentTrial++;
+    });
     _startTrial();
+  }
+
+  /// Feedback contrastivo: a certa e a marcada, na mesma voz e no mesmo ruído.
+  Future<void> _listenBoth() async {
+    final trial = _trial;
+    final feedback = _feedback;
+    if (trial == null || feedback == null || _isPlaying) return;
+    setState(() => _isPlaying = true);
+    final snr = _sessionLog.last['snr_presented'] as double;
+    try {
+      for (final (label, word) in [('Certa', trial.played), ('Marcada', feedback.selected)]) {
+        if (!mounted) return;
+        setState(() => _nowPlaying = '$label: "$word"');
+        final duration = await _engine.playCocktailStimulus(
+          text: word,
+          voice: trial.voice,
+          snrDb: snr,
+          noiseEnvironment: _currentEnvironment,
+          freqBand: trial.pair.contrast.cueBandHz.toDouble(),
+        );
+        await Future.delayed(duration + const Duration(milliseconds: 500));
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _isPlaying = false);
   }
 
   void _finishSession() async {
@@ -176,13 +219,24 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
       if (user != null) {
         await _supabase.saveGamificationData(_gamification.toMapForSupabase());
       }
-      if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro ao salvar sessão: $e")));
-        if (mounted) Navigator.pop(context);
       }
     }
+    if (!mounted) return;
+    // Nível de ruído em linguagem comum: SNR +15 dB = nível 1 ... -10 dB = nível 10.
+    final level = NoiseLevelHeader.levelOf(_currentSnr);
+    SessionSummaryScreen.replaceCurrent(
+      context,
+      SessionSummary(
+            training: 'Conversa no barulho',
+            correct: _correctAnswers,
+            total: _maxTrials,
+            duration: Duration(milliseconds: duration),
+            levelLine: 'Nível de ruído alcançado: $level de 10',
+      ),
+    );
   }
 
   @override
@@ -190,7 +244,7 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D0F),
       appBar: AppBar(
-        title: const Text("NÍVEL 4: EFEITO COQUETEL"),
+        title: const Text("Conversa no barulho", style: TextStyle(fontSize: 18)),
         backgroundColor: Colors.transparent,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(4),
@@ -201,42 +255,12 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
           ),
         ),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("SNR ADAPTATIVO", style: TextStyle(fontSize: 10, letterSpacing: 1.5, color: Colors.grey)),
-                      Text(
-                        _currentEnvironment,
-                        style: const TextStyle(color: Colors.white38, fontSize: 9, letterSpacing: 1),
-                      ),
-                    ],
-                  ),
-                  Text(
-                    "${_currentSnr.toInt()} dB",
-                    style: TextStyle(
-                      color: _currentSnr < 5 ? Colors.orange : Colors.greenAccent,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'monospace',
-                      fontSize: 20,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Spacer(),
+            NoiseLevelHeader(snrDb: _currentSnr),
+            const SizedBox(height: 32),
             const Icon(Icons.forum, size: 80, color: Colors.blueAccent),
             const SizedBox(height: 32),
             const Text("Compreensão em Ruído", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
@@ -249,7 +273,7 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
               "Palavra ${(_currentTrial + 1).clamp(1, _maxTrials)} de $_maxTrials",
               style: const TextStyle(color: Colors.white24, fontSize: 11, fontFamily: 'monospace'),
             ),
-            const Spacer(),
+            const SizedBox(height: 32),
             Row(
               children: _options.map((opt) => Expanded(
                 child: Padding(
@@ -258,7 +282,12 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF1E1E24),
                       minimumSize: const Size(0, 100),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: feedbackHighlight(_feedback, opt) == null
+                            ? BorderSide.none
+                            : BorderSide(color: feedbackHighlight(_feedback, opt)!, width: 4),
+                      ),
                     ),
                     onPressed: _canRespond ? () => _handleResponse(opt) : null,
                     child: Text(opt, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
@@ -266,6 +295,14 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
                 ),
               )).toList(),
             ),
+            const SizedBox(height: 16),
+            if (_feedback != null)
+              FeedbackBanner(
+                feedback: _feedback!,
+                nowPlaying: _nowPlaying,
+                onListenBoth: _feedback!.correct ? null : _listenBoth,
+                onContinue: _feedback!.correct || _isPlaying ? null : _advance,
+              ),
             const SizedBox(height: 16),
             TextButton.icon(
               onPressed: _isPlaying ? null : _playStimulus,

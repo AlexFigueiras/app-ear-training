@@ -33,8 +33,8 @@ checklist de escuta no celular (APK de profile). Análise e porquês em `docs/DE
 | 2 — Áudio que sai errado (TTS 48 kHz, ruído que não desliga, Repetir) | 🟡 | CI verde (run 37240201716). Checklist no celular adiado pelo usuário (fazer junto com a Etapa 3). **Ação humana:** publicar a Edge Function `tts` atualizada |
 | 3 — Motor C++ consertado (EQ multibanda, bypass de medição, limitador) | 🟡 | CI verde (run 37241421987, inclui TSan). Checklist no celular adiado pelo usuário |
 | 4 — Teste auditivo confiável | 🟡 | CI verde (run 37243740170). Checklist no celular adiado pelo usuário. Home e onboarding abrem o teste novo (commit 66031f6, auditoria de UX) |
-| 5 — Banco de estímulos que obriga a ouvir | 🟡 | Código pronto (achado D1); aguardando CI e checklist |
-| 6 — Feedback e fim de sessão | ⬜ | |
+| 5 — Banco de estímulos que obriga a ouvir | 🟡 | CI verde (run 37244933547). Checklist no celular adiado pelo usuário |
+| 6 — Feedback e fim de sessão | 🟡 | Código pronto (achados D3, parte de E1 e D5); aguardando CI e checklist |
 | 7 — Dificuldade real + Coquetel com ruído de fala | ⬜ | |
 | 8 — Medida de progresso (dígitos no ruído) | ⬜ | |
 | 9 — Espacial redesenhado | ⬜ | |
@@ -56,7 +56,7 @@ checklist de escuta no celular (APK de profile). Análise e porquês em `docs/DE
 | Discriminação fonêmica ("Palavras parecidas") | 🟡 | `lib/screens/phonemic_discrimination_screen.dart`, `lib/training/stimulus_bank.dart`, `lib/training/item_selector.dart` | Etapa 5: 49 pares de palavras reais (s×ch, s×f, t×p, t×k, plural, + aquecimento grave); qualquer palavra do par toca; 3 vozes; seleção por perda e erros recentes; guarda de audibilidade. Feedback e resumo vêm na Etapa 6; escada definitiva na Etapa 7 |
 | Atenção espacial | 🟡 | `lib/screens/spatial_attention_screen.dart` | Existe; monaural e sem adaptação — redesenho na Etapa 9 |
 | Fala no ruído (Speech-in-Noise) | 🟡 | `lib/screens/speech_in_noise_screen.dart` | Existe |
-| Gamificação (XP / Energia Neural / Streak) | 🟡 | `lib/core/gamification_controller.dart` | Existe |
+| Gamificação (XP / Streak) | 🟡 | `lib/core/gamification_controller.dart` | Energia Neural removida na Etapa 6 (punia o erro que a escada produz de propósito). XP/nível/streak ainda os antigos — reescritos na Etapa 10 |
 | Relatório clínico / missão | 🚫 | — | Removido na Etapa 1 (código órfão; o PDF "clínico" tinha números inventados). Resumo de sessão honesto vem na Etapa 6 |
 | Painel técnico + QA de áudio (oculto, long-press no topo da Home) | 🟡 | `lib/screens/widgets/technical_dashboard.dart`, `qa_audio_panel.dart` | Carga do DSP, xruns, acionamentos do limitador; em debug/profile: tons por orelha e palavra com/sem EQ (Etapa 3) |
 | Motor de áudio nativo (C++/Oboe via FFI) | 🟡 | `cpp/audio_graph.*`, `cpp/eq_bank.h`, `cpp/buffer_source.h`, `cpp/handoff.h`, `cpp/safety_limiter.h`, `cpp/oboe_engine.*`, `cpp/native_bridge.cpp`, `lib/audio_engine/` | Reescrito na Etapa 3: EQ de 8 bandas por orelha (biquads), ruído mixado depois do EQ, bypass para tons de medição, limitador -1 dBFS, troca de buffer sem lock. Testado no host (`cpp/tests/`, ASan/UBSan + TSan); no celular, só pelo checklist |

@@ -1,7 +1,10 @@
 import 'package:flutter/foundation.dart';
 
 /// Controlador Central de Gamificação Clínica [ORQUESTRADOR]
-/// Gerencia XP, Energia Neural e Nível de Acuidade de forma reativa.
+/// Gerencia XP, sequência de dias e SNR do Coquetel. A "Energia Neural" (vidas perdidas a cada
+/// erro) saiu na Etapa 6 do plano: a escada adaptativa erra de propósito ~20–30% das vezes, e
+/// punir esse erro gerava ansiedade sem efeito clínico. O limite de sessão passa a ser por tempo.
+/// Dados antigos com `neural_energy` são lidos e ignorados.
 class GamificationController extends ChangeNotifier {
   static final GamificationController _instance = GamificationController._internal();
   factory GamificationController() => _instance;
@@ -9,7 +12,6 @@ class GamificationController extends ChangeNotifier {
   GamificationController._internal();
 
   int _totalXP = 0;
-  int _neuralEnergy = 5;
   int _currentStreak = 0;
   int _sessionsCompletedToday = 0;
   String _acuityLevel = "INITIAL";
@@ -20,11 +22,9 @@ class GamificationController extends ChangeNotifier {
 
   // Getters
   int get totalXP => _totalXP;
-  int get neuralEnergy => _neuralEnergy;
   int get currentStreak => _currentStreak;
   int get sessionsCompletedToday => _sessionsCompletedToday;
   String get acuityLevel => _acuityLevel;
-  bool get hasEnergy => _neuralEnergy > 0;
   // Recomendação suave (sem bloco duro): ≥2 sessões/dia = mínimo efetivo
   bool get recommendRest => _sessionsCompletedToday >= 2;
   double get currentSNR => _currentSNR;
@@ -55,24 +55,6 @@ class GamificationController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void consumeEnergy() {
-    if (_neuralEnergy > 0) {
-      _neuralEnergy--;
-      notifyListeners();
-    }
-  }
-
-  /// Reinicia energia para nova sessão. Chamar no initState de cada tela de treino.
-  void resetEnergyForNewSession() {
-    _neuralEnergy = 5;
-    notifyListeners();
-  }
-
-  void resetEnergy() {
-    _neuralEnergy = 5;
-    notifyListeners();
-  }
-
   void incrementSessionsToday() {
     _sessionsCompletedToday++;
     notifyListeners();
@@ -92,7 +74,6 @@ class GamificationController extends ChangeNotifier {
   /// não pode herdar XP, sequência ou SNR do anterior.
   void resetForNewUser() {
     _totalXP = 0;
-    _neuralEnergy = 5;
     _currentStreak = 0;
     _sessionsCompletedToday = 0;
     _acuityLevel = "INITIAL";
@@ -115,7 +96,6 @@ class GamificationController extends ChangeNotifier {
   Map<String, dynamic> toMapForSupabase() {
     return {
       'total_xp': _totalXP,
-      'neural_energy': _neuralEnergy,
       'current_streak': _currentStreak,
       'acuity_level': _acuityLevel,
       'max_noise_threshold': _maxNoiseThreshold,
@@ -125,7 +105,6 @@ class GamificationController extends ChangeNotifier {
 
   void fromMap(Map<String, dynamic> map) {
     _totalXP = (map['total_xp'] as num?)?.toInt() ?? 0;
-    _neuralEnergy = (map['neural_energy'] as num?)?.toInt() ?? 5;
     _currentStreak = (map['current_streak'] as num?)?.toInt() ?? 0;
     _acuityLevel = map['acuity_level'] as String? ?? "INITIAL";
     _maxNoiseThreshold = (map['max_noise_threshold'] as num?)?.toDouble() ?? 0.0;

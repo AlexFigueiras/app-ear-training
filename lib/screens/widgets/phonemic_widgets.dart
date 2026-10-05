@@ -46,8 +46,11 @@ class PulseIconState extends State<PulseIcon> with SingleTickerProviderStateMixi
 class AnimatedOptionCard extends StatefulWidget {
   final String label;
   final VoidCallback onTap;
-  const AnimatedOptionCard({
-    super.key,required this.label, required this.onTap});
+
+  /// Borda de destaque no retorno (verde = certa, vermelho = marcada errada); null = normal.
+  final Color? highlight;
+
+  const AnimatedOptionCard({super.key, required this.label, required this.onTap, this.highlight});
 
   @override
   State<AnimatedOptionCard> createState() => AnimatedOptionCardState();
@@ -84,7 +87,10 @@ class AnimatedOptionCardState extends State<AnimatedOptionCard> with SingleTicke
           decoration: BoxDecoration(
             color: const Color(0xFF1E1E24),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white10),
+            border: Border.all(
+              color: widget.highlight ?? Colors.white24,
+              width: widget.highlight == null ? 1 : 4,
+            ),
           ),
           alignment: Alignment.center,
           child: Text(
