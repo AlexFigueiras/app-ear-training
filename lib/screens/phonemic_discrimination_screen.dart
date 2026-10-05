@@ -9,9 +9,11 @@ import '../services/audio_service_manager.dart';
 import '../services/supabase_service.dart';
 import '../training/adaptive_staircase.dart';
 import '../training/item_selector.dart';
+import '../training/progress_rules.dart';
 import 'hearing_test/hearing_test_flow.dart';
 import 'session_summary_screen.dart';
 import 'widgets/phonemic_widgets.dart';
+import 'widgets/training_app_bar.dart';
 import 'widgets/trial_feedback.dart';
 
 /// Treino "Palavras parecidas" (discriminação de pares mínimos).
@@ -67,25 +69,9 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
     if (!mounted) return;
     _selector = ItemSelector(audiogram: _audiogram);
     await _engine.initializeEngine(_audiogram);
-    if (_selector.nothingAudible && mounted) await _warnInaudible();
+    if (_selector.nothingAudible && mounted) await showInaudibleHighFrequencyWarning(context);
     _startTrial();
   }
-
-  /// Guarda de audibilidade: nenhuma pista aguda chega ao ouvido nem no máximo.
-  Future<void> _warnInaudible() => showDialog<void>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Os sons agudos estão fora do alcance'),
-          content: const Text(
-            'Pelo seu teste, os sons agudos das palavras (como o "s") não chegam ao seu ouvido nem '
-            'no volume máximo. Treinar não consegue criar essa percepção. Procure um '
-            'fonoaudiólogo: um aparelho auditivo pode trazer esses sons de volta. '
-            'Por enquanto, o treino vai usar só palavras com sons mais graves.',
-            style: TextStyle(fontSize: 16),
-          ),
-          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Entendi'))],
-        ),
-      );
 
   void _startTrial() {
     if (_clock.isOver) {
@@ -221,12 +207,15 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
         'boost_threshold_db': _boost.threshold,
         'staircase': '3-down-1-up',
         'stimulus_bank_version': 2,
+        'duration_ms': duration,
       },
     );
 
-    final contrasts = _sessionLog.map((e) => e['contrast'] as String).toList();
-    _gamification.addAcuityXP(session.accuracy / 100.0, contrasts);
-    _gamification.incrementSessionsToday();
+    final reward = _gamification.completeSession(
+      module: _module,
+      threshold: _boost.threshold ?? _boost.value,
+      duration: Duration(milliseconds: duration),
+    );
 
     try {
       await _supabase.saveRehabSession(session);
@@ -240,8 +229,7 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
       }
     }
     if (!mounted) return;
-    // Nível de dificuldade em linguagem comum: reforço 24 dB = nível 1 ... 0 dB = nível 7.
-    final level = (1 + ((24 - (_boost.threshold ?? _extraBoostDb)) / 4).round()).clamp(1, 7);
+    final level = ProgressRules.phonemicLevel(_boost.threshold ?? _extraBoostDb);
     SessionSummaryScreen.replaceCurrent(
       context,
       SessionSummary(
@@ -250,6 +238,8 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
             total: _currentTrial,
             duration: Duration(milliseconds: duration),
             levelLine: 'Nível de dificuldade alcançado: $level de 7',
+            reward: reward,
+            minutesToday: _gamification.minutesToday,
       ),
     );
   }
@@ -259,24 +249,11 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
     final options = _trial?.options ?? const <String>[];
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D0F),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        title: const Text("Palavras parecidas", style: TextStyle(fontSize: 18)),
-        actions: [
-          if (_currentTrial > 0)
-            TextButton(
-              onPressed: _isPlaying ? null : _finishSession,
-              child: const Text('Terminar', style: TextStyle(fontSize: 16)),
-            ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(4),
-          child: LinearProgressIndicator(
-            value: _clock.progress,
-            backgroundColor: Colors.white10,
-            valueColor: const AlwaysStoppedAnimation<Color>(Colors.greenAccent),
-          ),
-        ),
+      appBar: TrainingAppBar(
+        title: 'Palavras parecidas',
+        canFinish: _currentTrial > 0 && !_isPlaying,
+        onFinish: _finishSession,
+        progress: _clock.progress,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(vertical: 24),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../training/progress_rules.dart';
 import '../../ui/theme/bosyn_text.dart';
 
 /// Cabeçalho do treino com ruído: nível de ruído em linguagem comum (sem "SNR" nem dB, achado
@@ -9,7 +10,7 @@ class NoiseLevelHeader extends StatelessWidget {
 
   const NoiseLevelHeader({super.key, required this.snrDb});
 
-  static int levelOf(double snrDb) => (1 + ((15 - snrDb) / 25 * 9).round()).clamp(1, 10);
+  static int levelOf(double snrDb) => ProgressRules.noiseLevel(snrDb);
 
   @override
   Widget build(BuildContext context) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../training/progress_rules.dart';
 import '../ui/theme/bosyn_text.dart';
 
 /// Dados do resumo de fim de sessão.
@@ -12,12 +13,20 @@ class SessionSummary {
   /// Linha do nível atingido, em linguagem comum (ex.: "Nível de dificuldade: 4 de 7").
   final String? levelLine;
 
+  /// Pontos, recorde e meta (Etapa 10). null = sem recompensa a mostrar.
+  final SessionReward? reward;
+
+  /// Minutos treinados hoje, incluindo esta sessão.
+  final double? minutesToday;
+
   const SessionSummary({
     required this.training,
     required this.correct,
     required this.total,
     required this.duration,
     this.levelLine,
+    this.reward,
+    this.minutesToday,
   });
 
   int get minutes => (duration.inSeconds / 60).ceil();
@@ -60,6 +69,17 @@ class SessionSummaryScreen extends StatelessWidget {
             const SizedBox(height: 24),
             _line(Icons.timer_outlined, 'Tempo de treino: ${summary.minutes} min'),
             if (summary.levelLine != null) _line(Icons.trending_up, summary.levelLine!),
+            if (summary.reward case final reward?) ...[
+              _line(Icons.star_outline, '+${reward.points} pontos de treino'),
+              if (reward.newBest) _line(Icons.emoji_events_outlined, 'Novo recorde pessoal neste treino!'),
+            ],
+            if (summary.minutesToday case final today?)
+              _line(
+                Icons.flag_outlined,
+                today >= ProgressRules.dailyGoalMinutes
+                    ? 'Meta de hoje cumprida (${ProgressRules.dailyGoalMinutes} min).'
+                    : 'Hoje: ${today.floor()} de ${ProgressRules.dailyGoalMinutes} min.',
+              ),
             const SizedBox(height: 20),
             const Text(
               'Errar faz parte: o treino ajusta a dificuldade para você ficar sempre no limite do '

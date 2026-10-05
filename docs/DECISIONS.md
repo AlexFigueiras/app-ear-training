@@ -1,6 +1,55 @@
 # DECISIONS — histórico vivo de decisões
 > Entradas no topo (mais recente primeiro). Estado do que existe fica em `docs/STATUS.md`.
 
+## [2026-10-05] Plano "treino eficaz" — Etapa 10 (gamificação alinhada ao treino)
+- **Status:** accepted (aguardando CI + checklist no celular)
+- **Contexto (análise do treino + achado E3):**
+  - O XP era 100 × acerto × 2 quase sempre na Fonêmica e no Espacial e ×1 no Coquetel: a
+    tarefa mais útil pagava metade.
+  - O "STATUS: INITIAL/MODERATE/ADVANCED" era só XP acumulado (tempo de uso).
+  - A sequência de dias subia a cada abertura da Home, e mostrava "STREAK 0 dias" depois de 3
+    sessões no 1º dia.
+  - Apareciam "SESSÕES HOJE: 3 / 2" e "1 dias".
+  - O gráfico misturava o acerto de exercícios diferentes (e o acerto é o que a escada mantém
+    constante).
+  - Os níveis eram liberados por pagamento, não por domínio.
+  - A Home tinha 439 linhas.
+- **Decisões** (regras em Dart puro em `lib/training/progress_rules.dart`):
+  - **Pontos de treino por esforço:** 10 por minuto, iguais em todos os treinos, + 50 por
+    recorde pessoal (limiar menor que o melhor salvo em `training_state.<treino>.best`) + 30 ao
+    cruzar a meta do dia. A medida de dígitos soma minutos e pontos, sem recorde. Os pontos são
+    salvos em `total_xp` (nome mantido para preservar o histórico).
+  - **Nível por treino a partir do limiar da escada:** Palavras parecidas de 1 a 7; treinos com
+    ruído de 1 a 10. Estágios "Começando / Avançando / Dominando". O XP não define nível.
+  - **Meta:** 15 min/dia e 5 dias/semana. Dias seguidos = dias com a meta, recalculados do
+    histórico a cada abertura (a sequência não é mais incrementada). As sessões passam a gravar
+    `metadata.duration_ms`; as antigas usam tempo médio × tentativas.
+  - **Progressão por domínio:** Palavras parecidas é recomendada até o nível 5; depois, com o
+    plano completo, Conversa no barulho e então Voz de um lado. A Home mostra "Treino de hoje:
+    X" enquanto a meta não é cumprida e o selo "Recomendado para você" no cartão. O PRO
+    continua como está (leitura do Gatekeeper).
+  - **Pausa sugerida por tempo** (≥ 30 min no dia), no lugar da energia que punia o erro.
+  - **Resumo de sessão:** "+N pontos de treino", "Novo recorde pessoal", "Hoje: X de 15 min" ou
+    "Meta de hoje cumprida".
+  - **Home dividida:**
+    - `home/daily_goal_card.dart`: meta, semana, dias seguidos, pontos;
+    - `home/training_progress_section.dart`: um gráfico por treino com o nível e as datas;
+    - cartões com nível/estágio.
+    - A Home caiu para menos de 300 linhas.
+  - **Barra superior dos treinos** extraída (`widgets/training_app_bar.dart`): todos os arquivos
+    ficaram abaixo de 300 linhas líquidas (verify_rules sem aviso).
+  - **Removidos do controlador:** "nível de acuidade", SNR do Coquetel, contagem de sessões por
+    dia e `addAcuityXP`. Os dados antigos com essas chaves são lidos e ignorados.
+- **Interpretação registrada:** "estágios liberados por domínio" virou recomendação + estágio
+  nomeado dentro de cada treino, não um bloqueio. Bloquear treino por desempenho atrapalharia
+  quem treina com perda maior, e o acesso pago continua sendo o único bloqueio.
+- **Verificação:**
+  - `test/progress_rules_test.dart` (6 testes, rodados localmente): minutos do dia, sessões
+    antigas, dias seguidos estáveis ao recalcular, níveis/estágios, recorde e recomendação;
+  - `test/gamification_controller_test.dart` reescrito (pontos iguais entre treinos, bônus, nível
+    não muda com pontos, salvar/restaurar/logout, dados antigos), rodando no CI;
+  - `flutter analyze` limpo; verify_rules sem aviso de tamanho.
+
 ## [2026-10-05] Plano "treino eficaz" — Etapa 9 (Espacial redesenhado)
 - **Status:** accepted (aguardando CI + checklist no celular)
 - **Contexto:** o "De onde vem o som" tocava a palavra num ouvido só (pan ±1) ou nos dois

@@ -16,6 +16,7 @@ import 'hearing_test/hearing_test_flow.dart';
 import 'session_summary_screen.dart';
 import 'widgets/choice_grid.dart';
 import 'widgets/noise_level_header.dart';
+import 'widgets/training_app_bar.dart';
 import 'widgets/trial_feedback.dart';
 
 /// Treino "Conversa no barulho" (fala no ruído), Etapa 7 do plano:
@@ -230,10 +231,14 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
         'snr_threshold': _snr.threshold,
         'masker': _masker?.name,
         'staircase': '3-down-1-up',
+        'duration_ms': duration.inMilliseconds,
       },
     );
-    _gamification.addAcuityXP(session.accuracy / 100.0, [_mode.module]);
-    _gamification.incrementSessionsToday();
+    final reward = _gamification.completeSession(
+      module: _mode.module,
+      threshold: _snr.threshold ?? _snr.value,
+      duration: duration,
+    );
 
     try {
       await _supabase.saveRehabSession(session);
@@ -255,6 +260,8 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
         total: _trials,
         duration: duration,
         levelLine: 'Nível de ruído alcançado: $level de 10',
+        reward: reward,
+        minutesToday: _gamification.minutesToday,
       ),
     );
   }
@@ -264,24 +271,12 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
     final preparing = _masker == null;
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D0F),
-      appBar: AppBar(
-        title: Text(_mode.title, style: const TextStyle(fontSize: 18)),
-        backgroundColor: Colors.transparent,
-        actions: [
-          if (_trials > 0)
-            TextButton(
-              onPressed: _isPlaying ? null : _finishSession,
-              child: const Text('Terminar', style: TextStyle(fontSize: 16)),
-            ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(4),
-          child: LinearProgressIndicator(
-            value: _clock.progress,
-            backgroundColor: Colors.white10,
-            valueColor: const AlwaysStoppedAnimation<Color>(Colors.orange),
-          ),
-        ),
+      appBar: TrainingAppBar(
+        title: _mode.title,
+        canFinish: _trials > 0 && !_isPlaying,
+        onFinish: _finishSession,
+        progress: _clock.progress,
+        color: Colors.orange,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),

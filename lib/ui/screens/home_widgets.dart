@@ -107,11 +107,19 @@ class LevelCard extends StatelessWidget {
   final bool locked;
   final VoidCallback onTap;
 
+  /// Nível e estágio atuais (ex.: "Nível 4 de 7 · Avançando"); null antes do primeiro treino.
+  final String? progressLine;
+
+  /// Próximo treino sugerido pelo domínio alcançado (Etapa 10).
+  final bool recommended;
+
   const LevelCard(
       {super.key,
       required this.level,
       required this.locked,
-      required this.onTap});
+      required this.onTap,
+      this.progressLine,
+      this.recommended = false});
 
   @override
   Widget build(BuildContext context) {
@@ -122,14 +130,25 @@ class LevelCard extends StatelessWidget {
             : null;
     return Semantics(
       button: true,
-      label: [level.title, level.description, if (status != null) status]
+      label: [
+        level.title,
+        if (recommended) 'Recomendado para você',
+        level.description,
+        if (progressLine != null) progressLine!,
+        if (status != null) status,
+      ]
           .join('. '),
       excludeSemantics: true,
       child: Material(
         color: HomeColors.card,
         shape: RoundedRectangleBorder(
           side: BorderSide(
-              color: locked ? HomeColors.border : HomeColors.primaryButton),
+              color: recommended
+                  ? HomeColors.accent
+                  : locked
+                      ? HomeColors.border
+                      : HomeColors.primaryButton,
+              width: recommended ? 2 : 1),
           borderRadius: BorderRadius.circular(12),
         ),
         child: InkWell(
@@ -143,6 +162,15 @@ class LevelCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (recommended)
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 4),
+                          child: Text('Recomendado para você',
+                              style: TextStyle(
+                                  color: HomeColors.accent,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700)),
+                        ),
                       Text(level.title,
                           style: const TextStyle(
                               color: Colors.white,
@@ -154,6 +182,14 @@ class LevelCard extends StatelessWidget {
                               color: HomeColors.textSecondary,
                               fontSize: 15,
                               height: 1.4)),
+                      if (progressLine != null) ...[
+                        const SizedBox(height: 6),
+                        Text(progressLine!,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600)),
+                      ],
                       if (status != null) ...[
                         const SizedBox(height: 6),
                         Text(status,

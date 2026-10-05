@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../audio_engine/audio_engine.dart';
 import '../audio_engine/masker_bank.dart';
+import '../core/gamification_controller.dart';
 import '../models/audiogram.dart';
 import '../models/rehab_session.dart';
 import '../services/audio_service_manager.dart';
@@ -83,6 +84,9 @@ class _DigitsInNoiseScreenState extends State<DigitsInNoiseScreen> {
   Future<void> _finish() async {
     AudioServiceManager().silenceAll();
     final srt = _din.srt!;
+    final duration = DateTime.now().difference(_start);
+    final gamification = GamificationController();
+    final reward = gamification.completeSession(duration: duration);
     final user = Supabase.instance.client.auth.currentUser;
     final session = RehabSession(
       patientId: user?.id ?? '',
@@ -96,11 +100,13 @@ class _DigitsInNoiseScreenState extends State<DigitsInNoiseScreen> {
         'srt_db': srt,
         'voice': AudioRehabEngine.dinVoice,
         'masker': MaskerType.speechShaped.name,
+        'duration_ms': duration.inMilliseconds,
         'log': _log,
       },
     );
     try {
       await SupabaseService().saveRehabSession(session);
+      if (user != null) await SupabaseService().saveGamificationData(gamification.toMapForSupabase());
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar o resultado: $e')));
@@ -113,7 +119,9 @@ class _DigitsInNoiseScreenState extends State<DigitsInNoiseScreen> {
         training: 'Audição na fala',
         correct: _din.correctTriplets,
         total: DinProcedure.totalTriplets,
-        duration: DateTime.now().difference(_start),
+        duration: duration,
+        reward: reward,
+        minutesToday: gamification.minutesToday,
         levelLine: '${DinProcedure.describe(srt)} Medida interna do app, não é exame. '
             'Repita daqui a 14 dias para ver a evolução.',
       ),
