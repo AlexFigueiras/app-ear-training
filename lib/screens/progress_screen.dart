@@ -27,7 +27,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
   static const _names = {
     RehabLevel.phonemicDiscrimination: 'Palavras parecidas',
-    RehabLevel.spatialAttention: 'De onde vem o som',
+    RehabLevel.spatialAttention: 'Voz de um lado, barulho do outro',
     RehabLevel.speechInNoise: 'Conversa no barulho',
     RehabLevel.digitsInNoise: 'Audição na fala (medida)',
   };

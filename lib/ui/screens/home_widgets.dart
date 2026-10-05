@@ -25,8 +25,8 @@ class TrainingLevel {
   static const all = [
     TrainingLevel(2, 'Palavras parecidas',
         'Ouça uma palavra e escolha entre duas parecidas, como "sala" e "fala".'),
-    TrainingLevel(3, 'De onde vem o som',
-        'Diga se o som veio da esquerda, do centro ou da direita.'),
+    TrainingLevel(3, 'Voz de um lado, barulho do outro',
+        'Entenda a voz que vem de um lado com barulho do outro, como numa mesa de restaurante.'),
     TrainingLevel(4, 'Conversa no barulho',
         'Entenda palavras com ruído de fundo, como num restaurante.'),
   ];
@@ -233,7 +233,7 @@ Future<void> showProComingSoonSheet(BuildContext context) {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Os treinos "De onde vem o som" e "Conversa no barulho" vão fazer parte do '
+                'Os treinos "Voz de um lado, barulho do outro" e "Conversa no barulho" vão fazer parte do '
                 'plano PRO, que ainda não está à venda. Nada será cobrado sem a sua '
                 'confirmação na loja de aplicativos.',
                 style:

@@ -93,6 +93,15 @@ NATIVE_EXPORT void set_target_panning(EngineContext* ctx, float panning) {
     if (auto* g = graphOf(ctx)) g->setPanning(panning);
 }
 
+// Direção do alvo / do ruído (graus: 0 = frente, +90 = direita). enabled = 0 volta à identidade.
+NATIVE_EXPORT void set_target_azimuth(EngineContext* ctx, float deg, int32_t enabled) {
+    if (auto* g = graphOf(ctx)) enabled ? g->setTargetAzimuth(deg) : g->disableTargetSpatial();
+}
+
+NATIVE_EXPORT void set_masker_azimuth(EngineContext* ctx, float deg, int32_t enabled) {
+    if (auto* g = graphOf(ctx)) enabled ? g->setMaskerAzimuth(deg) : g->disableMaskerSpatial();
+}
+
 NATIVE_EXPORT void silence_all(EngineContext* ctx) {
     if (auto* g = graphOf(ctx)) g->silenceAll();
 }

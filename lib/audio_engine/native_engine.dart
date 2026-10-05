@@ -47,6 +47,10 @@ class NativeDSPBridge implements ffi.Finalizable {
   late final _setPanning = _lib.lookupFunction<_CtxFloatC, _CtxFloat>('set_target_panning');
   late final _silenceAll = _lib.lookupFunction<_CtxVoidC, _CtxVoid>('silence_all');
   late final _setEqTargets = _lib.lookupFunction<_EqC, _Eq>('set_eq_targets');
+  late final _setTargetAzimuth = _lib.lookupFunction<ffi.Void Function(ffi.Pointer<EngineContext>, ffi.Float, ffi.Int32),
+      void Function(ffi.Pointer<EngineContext>, double, int)>('set_target_azimuth');
+  late final _setMaskerAzimuth = _lib.lookupFunction<ffi.Void Function(ffi.Pointer<EngineContext>, ffi.Float, ffi.Int32),
+      void Function(ffi.Pointer<EngineContext>, double, int)>('set_masker_azimuth');
   late final _setBypass = _lib.lookupFunction<_CtxIntC, _CtxInt>('set_dsp_bypass');
   late final _resetLimiterHits = _lib.lookupFunction<_CtxVoidC, _CtxVoid>('reset_limiter_hits');
   late final _limiterHits = _lib.lookupFunction<ffi.Int32 Function(ffi.Pointer<EngineContext>),
@@ -107,6 +111,12 @@ class NativeDSPBridge implements ffi.Finalizable {
       ffi.calloc.free(right);
     }
   }
+
+  /// Direção da palavra (graus: 0 = frente, +90 = direita); null = sem direção (identidade).
+  void setTargetAzimuth(double? degrees) => _setTargetAzimuth(_ctx, degrees ?? 0, degrees == null ? 0 : 1);
+
+  /// Direção do ruído de fundo; null = sem direção.
+  void setMaskerAzimuth(double? degrees) => _setMaskerAzimuth(_ctx, degrees ?? 0, degrees == null ? 0 : 1);
 
   /// true = sem EQ (tons de medição e calibração).
   void setDspBypass(bool bypass) => _setBypass(_ctx, bypass ? 1 : 0);

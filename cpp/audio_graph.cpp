@@ -2,7 +2,8 @@
 #include <algorithm>
 #include <chrono>
 
-AudioGraph::AudioGraph(float sampleRate) : sampleRate_(sampleRate), limiter_(sampleRate) {
+AudioGraph::AudioGraph(float sampleRate)
+    : sampleRate_(sampleRate), limiter_(sampleRate), targetSpatial_(sampleRate), maskerSpatial_(sampleRate) {
     const float flat[EqDesign::kBands] = {0};
     eq_.publish(new EqDesign(EqDesign::design(flat, flat, sampleRate_)));
 }
@@ -37,6 +38,8 @@ void AudioGraph::renderBlock(float* out, int frames) {
     const float pan = panning_.load(std::memory_order_acquire);
     const float panL = pan <= 0.0f ? 1.0f : 1.0f - pan;
     const float panR = pan >= 0.0f ? 1.0f : 1.0f + pan;
+    const SpatialParams* targetDir = targetSpatial_.acquire();
+    const SpatialParams* maskerDir = maskerSpatial_.acquire();
 
     // Tempo de reação: marca o instante em que o alvo começa a soar.
     if (targetActive && !targetWasActive_) onsetNs_.store(nowNs(), std::memory_order_release);
@@ -49,8 +52,13 @@ void AudioGraph::renderBlock(float* out, int frames) {
             l = eqState_.process(*eq, 0, l);
             r = eqState_.process(*eq, 1, r);
         }
-        l = l * panL + maskerL_[i];
-        r = r * panR + maskerR_[i];
+        l *= panL;
+        r *= panR;
+        if (targetDir != nullptr) targetSpatial_.process(targetDir, l, r);
+        float ml = maskerL_[i], mr = maskerR_[i];
+        if (maskerDir != nullptr) maskerSpatial_.process(maskerDir, ml, mr);
+        l += ml;
+        r += mr;
         limiter_.process(l, r);
         out[2 * i] = l;
         out[2 * i + 1] = r;

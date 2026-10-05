@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -21,17 +23,37 @@ import 'widgets/trial_feedback.dart';
 /// - 4 opções {sala, fala, salas, falas} (chance de 25%) e frase-veículo "Diga ___ agora";
 /// - escada 3-acertos/1-erro no SNR (~79% de acerto), retomada de onde parou;
 /// - sessão de ~10 minutos, sem punição por erro.
+/// Variantes do treino no ruído.
+enum NoiseTraining {
+  /// Fala e ruído do mesmo lugar.
+  cocktail('cocktail', 'Conversa no barulho', RehabLevel.speechInNoise, 10),
+
+  /// Etapa 9: a voz vem de um lado (±60°) e o burburinho do outro. Treina usar a posição para
+  /// separar a voz do barulho (liberação espacial do mascaramento), em vez do antigo "de que
+  /// lado veio", que tocava num ouvido só e qualquer pessoa acertava.
+  spatial('spatial', 'Voz de um lado, barulho do outro', RehabLevel.spatialAttention, 5);
+
+  final String module;
+  final String title;
+  final RehabLevel level;
+  final double startSnr;
+
+  const NoiseTraining(this.module, this.title, this.level, this.startSnr);
+}
+
 class SpeechInNoiseScreen extends StatefulWidget {
   final Audiogram audiogram;
-  const SpeechInNoiseScreen({super.key, required this.audiogram});
+  final NoiseTraining training;
+  const SpeechInNoiseScreen({super.key, required this.audiogram, this.training = NoiseTraining.cocktail});
 
   @override
   State<SpeechInNoiseScreen> createState() => _SpeechInNoiseScreenState();
 }
 
 class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
-  static const _module = 'cocktail';
-
+  NoiseTraining get _mode => widget.training;
+  static const double _azimuth = 60;
+  int _side = 1; // +1 = voz à direita, -1 = à esquerda (modo espacial)
   late Audiogram _audiogram;
   final AudioRehabEngine _engine = AudioRehabEngine();
   final SupabaseService _supabase = SupabaseService();
@@ -55,7 +77,7 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
     super.initState();
     _audiogram = widget.audiogram;
     _selector = ItemSelector(audiogram: _audiogram, warmUpTrials: 0);
-    _snr = AdaptiveStaircase.resume(_gamification.trainingState(_module), start: 10, minValue: -15, maxValue: 20);
+    _snr = AdaptiveStaircase.resume(_gamification.trainingState(_mode.module), start: _mode.startSnr, minValue: -15, maxValue: 20);
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
   }
 
@@ -65,7 +87,9 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
     _selector = ItemSelector(audiogram: _audiogram, warmUpTrials: 0);
     await _engine.initializeEngine(_audiogram);
     // Burburinho (mais difícil: compete pela atenção) a partir do nível 5 de ruído.
-    final wanted = NoiseLevelHeader.levelOf(_snr.value) >= 5 ? MaskerType.babble : MaskerType.speechShaped;
+    final wanted = _mode == NoiseTraining.spatial || NoiseLevelHeader.levelOf(_snr.value) >= 5
+        ? MaskerType.babble
+        : MaskerType.speechShaped;
     final used = await _engine.startMasker(wanted);
     if (!mounted) return;
     setState(() => _masker = used);
@@ -86,15 +110,19 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
       return;
     }
     _trial = _selector.nextQuad();
+    _side = math.Random().nextBool() ? 1 : -1;
     setState(() => _canRespond = false);
     _playStimulus();
   }
 
   Future<void> _playWord(String word, Trial trial, double snrDb) async {
+    final spatial = _mode == NoiseTraining.spatial;
     final duration = await _engine.playCocktailStimulus(
       text: _carrier(word),
       voice: trial.voice,
       snrDb: snrDb,
+      azimuthDeg: spatial ? _side * _azimuth : null,
+      maskerAzimuthDeg: spatial ? -_side * _azimuth : null,
       freqBand: trial.pair.contrast.cueBandHz.toDouble(),
     );
     await Future.delayed(duration);
@@ -140,6 +168,7 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
       'selected': selected,
       'snr_presented': presentedSnr,
       'masker': _masker?.name,
+      if (_mode == NoiseTraining.spatial) 'voice_azimuth_deg': _side * _azimuth,
       'correct': isCorrect,
     });
 
@@ -187,11 +216,11 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
     _finished = true;
     AudioServiceManager().silenceAll(); // o ruído para já
     final duration = _clock.elapsed;
-    _gamification.saveTrainingState(_module, _snr.toJson());
+    _gamification.saveTrainingState(_mode.module, _snr.toJson());
     final session = RehabSession(
       patientId: _audiogram.patientId,
       date: DateTime.now(),
-      level: RehabLevel.speechInNoise,
+      level: _mode.level,
       totalTrials: _trials,
       correctAnswers: _correctAnswers,
       averageResponseTimeMs: _trials == 0 ? 0 : duration.inMilliseconds / _trials,
@@ -203,7 +232,7 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
         'staircase': '3-down-1-up',
       },
     );
-    _gamification.addAcuityXP(session.accuracy / 100.0, ['cocktail']);
+    _gamification.addAcuityXP(session.accuracy / 100.0, [_mode.module]);
     _gamification.incrementSessionsToday();
 
     try {
@@ -221,7 +250,7 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
     SessionSummaryScreen.replaceCurrent(
       context,
       SessionSummary(
-        training: 'Conversa no barulho',
+        training: _mode.title,
         correct: _correctAnswers,
         total: _trials,
         duration: duration,
@@ -236,7 +265,7 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D0F),
       appBar: AppBar(
-        title: const Text("Conversa no barulho", style: TextStyle(fontSize: 18)),
+        title: Text(_mode.title, style: const TextStyle(fontSize: 18)),
         backgroundColor: Colors.transparent,
         actions: [
           if (_trials > 0)
@@ -267,6 +296,14 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
               style: const TextStyle(fontSize: 18, color: Colors.white),
               textAlign: TextAlign.center,
             ),
+            if (_mode == NoiseTraining.spatial && !preparing) ...[
+              const SizedBox(height: 8),
+              Text(
+                'A voz vem da ${_side > 0 ? 'DIREITA' : 'ESQUERDA'}. O barulho vem do outro lado.',
+                style: const TextStyle(fontSize: 18, color: Color(0xFF60A5FA), fontWeight: FontWeight.w700),
+                textAlign: TextAlign.center,
+              ),
+            ],
             const SizedBox(height: 8),
             Text('Faltam cerca de ${_clock.minutesLeft} min',
                 style: const TextStyle(color: Colors.white70, fontSize: 16)),

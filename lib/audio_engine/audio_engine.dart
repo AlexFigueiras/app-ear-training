@@ -80,10 +80,19 @@ class AudioRehabEngine {
   /// Prepara o caminho do alvo: EQ do paciente (+ boost agudo), sem bypass e pan. Com [snrDb],
   /// ajusta o ganho do ruído de fundo (que precisa ter sido iniciado com [startMasker]); sem
   /// ele, o ruído fica mudo.
-  void _prepareSpeech({double boostDb = 0.0, double panning = 0.0, double? snrDb}) {
+  /// [azimuthDeg]/[maskerAzimuthDeg]: direção da palavra e do ruído (null = sem direção).
+  void _prepareSpeech({
+    double boostDb = 0.0,
+    double panning = 0.0,
+    double? snrDb,
+    double? azimuthDeg,
+    double? maskerAzimuthDeg,
+  }) {
     _applyEq(_profile.withHighBandBoost(boostDb));
     _nativeBridge.setDspBypass(false);
     _nativeBridge.setTargetPanning(panning);
+    _nativeBridge.setTargetAzimuth(azimuthDeg);
+    _nativeBridge.setMaskerAzimuth(maskerAzimuthDeg);
     _nativeBridge.setMaskerGain(snrDb == null ? 0.0 : SignalLevel.maskerGainForSnr(snrDb));
   }
 
@@ -134,31 +143,19 @@ class AudioRehabEngine {
     return _durationOf(samples);
   }
 
-  /// Espacial (provisório: redesenho na Etapa 9 do plano).
-  Future<Duration> playSpatialStimulus({
-    required String text,
-    String? voice,
-    required double panning,
-    double freqBand = 4000.0,
-  }) async {
-    _verifySecurityScope();
-    final samples = await _loadSpeech(text, voice: voice);
-    _prepareSpeech(panning: panning);
-    _loadSampleToNative(samples);
-    return _durationOf(samples);
-  }
-
   /// Fala no ruído. Fala e ruído têm o mesmo RMS e o ruído entra depois do EQ: o SNR pedido é o
   /// entregue, inclusive abaixo de 0 dB. O ruído precisa ter sido iniciado com [startMasker].
   Future<Duration> playCocktailStimulus({
     required String text,
     String? voice,
     required double snrDb,
+    double? azimuthDeg,
+    double? maskerAzimuthDeg,
     double freqBand = 4000.0,
   }) async {
     _verifySecurityScope();
     final samples = await _loadSpeech(text, voice: voice);
-    _prepareSpeech(snrDb: snrDb);
+    _prepareSpeech(snrDb: snrDb, azimuthDeg: azimuthDeg, maskerAzimuthDeg: maskerAzimuthDeg);
     _loadSampleToNative(samples);
     debugPrint("COQUETEL: SNR=$snrDb dB");
     return _durationOf(samples);
@@ -193,6 +190,8 @@ class AudioRehabEngine {
     }
     _nativeBridge.setDspBypass(true);
     _nativeBridge.setTargetPanning(0.0);
+    _nativeBridge.setTargetAzimuth(null);
+    _nativeBridge.setMaskerAzimuth(null);
     _nativeBridge.setMaskerGain(SignalLevel.maskerGainForSnr(snrDb));
     _loadSampleToNative(triplet);
     return _durationOf(triplet);
@@ -257,6 +256,8 @@ class AudioRehabEngine {
 
   void _prepareTone({required double panning}) {
     _nativeBridge.setDspBypass(true);
+    _nativeBridge.setTargetAzimuth(null);
+    _nativeBridge.setMaskerAzimuth(null);
     _nativeBridge.setTargetPanning(panning);
     _nativeBridge.setMaskerGain(0.0);
   }

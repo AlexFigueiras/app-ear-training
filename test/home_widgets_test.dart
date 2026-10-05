@@ -18,7 +18,7 @@ void main() {
     await tester
         .pumpWidget(host(LevelCard(level: level, locked: true, onTap: () {})));
 
-    expect(find.text('De onde vem o som'), findsOneWidget);
+    expect(find.text('Voz de um lado, barulho do outro'), findsOneWidget);
     expect(find.text('Plano PRO, em breve'), findsOneWidget);
     expect(find.byIcon(Icons.lock_outline), findsOneWidget);
     expect(find.text('REQUER PRO'), findsNothing);

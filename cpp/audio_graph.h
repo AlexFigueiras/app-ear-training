@@ -5,11 +5,12 @@
 #include "eq_bank.h"
 #include "handoff.h"
 #include "safety_limiter.h"
+#include "spatializer.h"
 
 // Mixer do BOSYN, sem dependência do Oboe (testável no host, ver cpp/tests/).
 //
-//   alvo (palavra/tom) -> EQ por orelha (ou bypass) -> pan --+
-//   masker (ruído de fala / burburinho, em loop) -------------+--> limitador -1 dBFS -> saída
+//   alvo (palavra/tom) -> EQ por orelha (ou bypass) -> pan -> direção (ITD + sombra) --+
+//   masker (ruído de fala / burburinho, em loop) -> direção -------------------------+--> limitador -> saída
 //
 // O ruído entra DEPOIS do EQ: o SNR pedido é o SNR entregue. Tons de medição usam bypass:
 // medir limiar através de processamento invalida o audiograma.
@@ -26,6 +27,11 @@ public:
     void setPanning(float panning) { panning_.store(panning, std::memory_order_release); }
     void setBypass(bool bypass) { bypass_.store(bypass, std::memory_order_release); }
     void setEqTargets(const float* leftDb, const float* rightDb);
+    // Direção (graus: 0 = frente, +90 = direita). Sem direção = identidade.
+    void setTargetAzimuth(float deg) { targetSpatial_.setAzimuth(deg); }
+    void disableTargetSpatial() { targetSpatial_.disable(); }
+    void setMaskerAzimuth(float deg) { maskerSpatial_.setAzimuth(deg); }
+    void disableMaskerSpatial() { maskerSpatial_.disable(); }
     void silenceAll();
 
     int targetFramesRemaining() const { return target_.framesRemaining(); }
@@ -46,6 +52,8 @@ private:
     Handoff<EqDesign> eq_;
     EqState eqState_;
     SafetyLimiter limiter_;
+    Spatializer targetSpatial_;
+    Spatializer maskerSpatial_;
 
     std::atomic<float> panning_{0.0f};
     std::atomic<bool> bypass_{false};

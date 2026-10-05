@@ -1,6 +1,42 @@
 # DECISIONS — histórico vivo de decisões
 > Entradas no topo (mais recente primeiro). Estado do que existe fica em `docs/STATUS.md`.
 
+## [2026-10-05] Plano "treino eficaz" — Etapa 9 (Espacial redesenhado)
+- **Status:** accepted (aguardando CI + checklist no celular)
+- **Contexto:** o "De onde vem o som" tocava a palavra num ouvido só (pan ±1) ou nos dois
+  (centro), sem adaptação. Qualquer pessoa com os dois ouvidos acertava quase tudo, e a tarefa
+  não treinava nada útil para consoantes nem para conversa no barulho.
+- **Decisões:**
+  - **Motor** (`cpp/spatializer.h`, integrado ao `AudioGraph` no caminho do alvo e no do ruído):
+    - ITD pela fórmula de Woodworth (cabeça de 8,75 cm; ~0,66 ms a 90°), com atraso fracionário
+      por interpolação linear;
+    - sombra da cabeça pelo modelo de Brown & Duda (1998): filtro de 1ª ordem por orelha, com
+      diferença de nível grande nos agudos e quase nula nos graves;
+    - parâmetros trocados por `Handoff` (sem lock);
+    - sem direção = identidade (os outros treinos, o teste auditivo e o de dígitos desligam a
+      direção);
+    - FFI: `set_target_azimuth` e `set_masker_azimuth`.
+  - **Tarefa nova** ("Voz de um lado, barulho do outro"): liberação espacial do mascaramento.
+    - A voz vem de ±60° (sorteado por tentativa, com aviso "A voz vem da DIREITA/ESQUERDA") e o
+      burburinho de 6 vozes do lado oposto.
+    - A pessoa identifica a palavra entre 4 opções.
+    - Escada 3-acertos/1-erro no SNR, salva em `training_state.spatial` (começa em +5 dB).
+    - É o modo `NoiseTraining.spatial` da mesma tela do Coquetel, que reaproveita retorno,
+      "Ouvir as duas", resumo e sessão por tempo. `SpatialAttentionScreen` virou um atalho para
+      esse modo.
+  - **Nomes:** "Voz de um lado, barulho do outro" na Home, no PRO e em "Meu progresso".
+- **Fora do escopo (opcional no plano):** o aquecimento de lateralização com ITD/ILD adaptativos
+  não foi feito. O aviso de lado já orienta a atenção, e a tarefa principal é a que importa
+  para a conversa.
+- **Verificação:** `cpp/tests/spatial_test.cpp` mede na saída do mixer:
+  - ITD de 90° = 31,5 amostras ±1,5 por correlação cruzada, e o espelho em -90°;
+  - diferença de nível em 4 kHz > 10 dB e em 250 Hz < 3 dB, batendo com o modelo a ±1 dB;
+  - 0° simétrico;
+  - identidade sem direção;
+  - ruído com direção.
+
+  O estresse com duas threads troca direções sob TSan. `flutter analyze` limpo.
+
 ## [2026-10-05] Plano "treino eficaz" — Etapa 8 (medida de progresso honesta)
 - **Status:** accepted (aguardando CI + checklist no celular)
 - **Contexto:**

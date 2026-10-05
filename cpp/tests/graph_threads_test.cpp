@@ -24,6 +24,9 @@ int main() {
                 const float profile[EqDesign::kBands] = {0, 0, 1, 3, 6, 9, 12, (float)(round % 20)};
                 graph.setEqTargets(profile, profile);
             }
+            if (round % 23 == 0) graph.setTargetAzimuth((float)(round % 180) - 90.0f);
+            if (round % 29 == 0) graph.setMaskerAzimuth(round % 2 ? 60.0f : -60.0f);
+            if (round % 31 == 0) graph.disableTargetSpatial();
             if (round % 17 == 0) graph.silenceAll();
             (void)graph.targetFramesRemaining();
             (void)graph.limiterHits();
