@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../ui/theme/bosyn_text.dart';
+
 // Elementos visuais da tela de Discriminação Fonêmica.
 
 class PulseIcon extends StatefulWidget {
@@ -75,7 +77,13 @@ class AnimatedOptionCardState extends State<AnimatedOptionCard> with SingleTicke
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    // Botão com nome para o leitor de tela (achado G4); o texto encolhe com fonte grande (G3).
+    return Semantics(
+      button: true,
+      label: widget.label,
+      excludeSemantics: true,
+      onTap: widget.onTap,
+      child: GestureDetector(
       onTapDown: (_) => _controller.forward(),
       onTapUp: (_) => _controller.reverse(),
       onTap: widget.onTap,
@@ -88,16 +96,20 @@ class AnimatedOptionCardState extends State<AnimatedOptionCard> with SingleTicke
             color: const Color(0xFF1E1E24),
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: widget.highlight ?? Colors.white24,
+              color: widget.highlight ?? BosynText.outline,
               width: widget.highlight == null ? 1 : 4,
             ),
           ),
           alignment: Alignment.center,
-          child: Text(
-            widget.label,
-            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
+          padding: const EdgeInsets.all(8),
+          child: FittedBox(
+            child: Text(
+              widget.label,
+              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
           ),
         ),
+      ),
       ),
     );
   }

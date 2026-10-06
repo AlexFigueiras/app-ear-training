@@ -15,6 +15,9 @@ class BosynText {
   static const Color secondary = Color(0xFFB8B8C0); // contraste AA sobre #0A0A0A
   static const Color accent = Color(0xFF00FF41);
 
+  /// Contorno de botões e campos: contraste ≥ 3:1 sobre o fundo escuro (WCAG 1.4.11).
+  static const Color outline = Color(0xFF8A8A8A);
+
   static const TextStyle title = TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: primary);
   static const TextStyle heading = TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: primary);
   static const TextStyle body = TextStyle(fontSize: 16, color: primary, height: 1.4);

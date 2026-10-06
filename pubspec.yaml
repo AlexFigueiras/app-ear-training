@@ -12,6 +12,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # Textos do sistema (voltar, menus, leitor de tela) em pt-BR. Parte do SDK do Flutter;
+  # aprovado pelo usuário na Etapa 11 do plano "treino eficaz".
+  flutter_localizations:
+    sdk: flutter
   cupertino_icons: ^1.0.6
   audio_session: ^0.1.18
   fl_chart: ^0.68.0
@@ -21,7 +25,6 @@ dependencies:
   path_provider: ^2.1.5
   crypto: ^3.0.7
   ffi: ^2.2.0
-  shared_preferences: ^2.5.5
   introduction_screen: ^4.0.0
   device_info_plus: ^13.0.0
 

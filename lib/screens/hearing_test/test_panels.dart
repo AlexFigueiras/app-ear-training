@@ -104,7 +104,7 @@ class AnswerButton extends StatelessWidget {
             backgroundColor: primary ? const Color(0xFF2563EB) : const Color(0xFF2A2A33),
             foregroundColor: Colors.white,
           ),
-          child: Text(label, style: BosynText.button),
+          child: FittedBox(child: Text(label, style: BosynText.button)),
         ),
       );
 }

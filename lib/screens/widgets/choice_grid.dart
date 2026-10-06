@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../ui/theme/bosyn_text.dart';
 import 'trial_feedback.dart';
 
 /// Opções de resposta em grade de 2 colunas (2 ou 4 opções), com o destaque do retorno.
@@ -38,7 +39,7 @@ class ChoiceGrid extends StatelessWidget {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                     side: feedbackHighlight(feedback, option) == null
-                        ? const BorderSide(color: Colors.white24)
+                        ? const BorderSide(color: BosynText.outline)
                         : BorderSide(color: feedbackHighlight(feedback, option)!, width: 4),
                   ),
                 ),

@@ -15,7 +15,7 @@ class LegalDocumentScreen extends StatelessWidget {
       {super.key, required this.title, required this.assetPath, this.content});
 
   static const _bodyStyle =
-      TextStyle(color: Colors.white70, fontSize: 13, height: 1.5);
+      TextStyle(color: Colors.white, fontSize: 16, height: 1.5);
 
   @override
   Widget build(BuildContext context) {

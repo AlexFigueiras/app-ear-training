@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -16,7 +17,6 @@ import '../../services/supabase_service.dart';
 import '../../training/digits_in_noise.dart';
 import '../../training/progress_rules.dart';
 import 'account_screen.dart';
-import 'calibration_screen.dart';
 import 'home/daily_goal_card.dart';
 import 'home/training_progress_section.dart';
 import 'home_widgets.dart';
@@ -242,23 +242,22 @@ class _HomeScreenState extends State<HomeScreen> {
         Expanded(
           child: GestureDetector(
             // Painel técnico (QA de áudio) por toque longo, como antes.
-            onLongPress: () => showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: Colors.transparent,
-              builder: (_) => const TechnicalDashboard(),
-            ),
+            // Painel técnico (QA de áudio) só nas versões de teste: em produção o paciente não cai
+            // nele por um toque longo sem querer (achado E5).
+            onLongPress: kReleaseMode
+                ? null
+                : () => showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => const TechnicalDashboard(),
+                    ),
             child: Semantics(
               header: true,
               child: const Text('BOSYN · Treino auditivo',
                   style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
             ),
           ),
-        ),
-        IconButton(
-          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CalibrationScreen())),
-          icon: const Icon(Icons.tune, color: HomeColors.textSecondary),
-          tooltip: "Calibrar tempo de resposta",
         ),
         IconButton(
           onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AccountScreen())),

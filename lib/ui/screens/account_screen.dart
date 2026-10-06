@@ -91,13 +91,12 @@ class _AccountScreenState extends State<AccountScreen> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            const Text('CONTA',
+            const Text('Sua conta',
                 style: TextStyle(
-                    color: Colors.white38, fontSize: 10, letterSpacing: 2)),
+                    color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
             Text(email,
-                style: const TextStyle(
-                    color: Colors.white, fontFamily: 'monospace')),
+                style: const TextStyle(color: Colors.white, fontSize: 16)),
             const SizedBox(height: 24),
             Container(
               padding: const EdgeInsets.all(16),
@@ -108,7 +107,7 @@ class _AccountScreenState extends State<AccountScreen> {
               child: const Text(
                 LegalDocuments.healthDisclaimer,
                 style:
-                    TextStyle(color: Colors.white70, fontSize: 12, height: 1.5),
+                    TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
               ),
             ),
             const SizedBox(height: 24),

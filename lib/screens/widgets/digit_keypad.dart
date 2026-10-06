@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../ui/theme/bosyn_text.dart';
+
 /// Teclado do teste de dígitos: 3 casas para os números ouvidos, teclas 0–9, apagar e confirmar.
 /// Teclas grandes (64 dp) com nome para o leitor de tela.
 class DigitKeypad extends StatelessWidget {
@@ -31,10 +33,12 @@ class DigitKeypad extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: i == entered.length && enabled ? Colors.white : Colors.white38, width: 2),
+              border: Border.all(color: i == entered.length && enabled ? Colors.white : BosynText.outline, width: 2),
             ),
-            child: Text(i < entered.length ? '${entered[i]}' : '',
-                style: const TextStyle(fontSize: 34, fontWeight: FontWeight.bold, color: Colors.white)),
+            child: FittedBox(
+              child: Text(i < entered.length ? '' : '',
+                  style: const TextStyle(fontSize: 34, fontWeight: FontWeight.bold, color: Colors.white)),
+            ),
           ),
       ]),
       const SizedBox(height: 24),
@@ -71,7 +75,7 @@ class DigitKeypad extends StatelessWidget {
     }
     return _button(
       label: '$key',
-      child: Text('$key', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+      child: FittedBox(child: Text('$key', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold))),
       onPressed: enabled && !full ? () => onDigit(key) : null,
     );
   }

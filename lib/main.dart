@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:ear_training/core/app_config.dart';
 import 'package:ear_training/core/gamification_controller.dart';
@@ -64,6 +65,11 @@ class EarTrainingApp extends StatelessWidget {
     return MaterialApp(
       title: 'BOSYN — Treino auditivo',
       debugShowCheckedModeBanner: false,
+      // Textos do sistema (voltar, menus, leitor de tela) em português (achado G4: o TalkBack
+      // lia "Back, Back").
+      locale: const Locale('pt', 'BR'),
+      supportedLocales: const [Locale('pt', 'BR')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF0A0A0A),
         primaryColor: const Color(0xFF2563EB),

@@ -39,7 +39,7 @@ class HearingTestResultView extends StatelessWidget {
             decoration: BoxDecoration(
               color: const Color(0xFF1A1A22),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white24),
+              border: Border.all(color: BosynText.outline),
             ),
             child: Text(advice.message, style: BosynText.body),
           ),

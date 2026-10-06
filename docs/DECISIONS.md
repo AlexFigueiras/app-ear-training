@@ -1,6 +1,52 @@
 # DECISIONS — histórico vivo de decisões
 > Entradas no topo (mais recente primeiro). Estado do que existe fica em `docs/STATUS.md`.
 
+## [2026-10-05] Plano "treino eficaz" — Etapa 11 (acessibilidade e linguagem)
+- **Status:** accepted (aguardando CI + checklist no celular)
+- **Contexto:** achados da auditoria de UX que ficaram com o plano:
+  - **G1:** cores abaixo de AA.
+  - **G2:** fontes < 12 px.
+  - **G3:** fonte em 200% cortava telas.
+  - **G4:** controles sem nome; app sem localização pt-BR (o TalkBack lia "Back, Back").
+  - **D5:** jargão.
+  - **E4:** a calibração media "tempo de reação − 200 ms" e o círculo "INICIAR" não iniciava.
+  - **E5:** modo engenheiro por toque longo.
+
+  As Etapas 4 a 10 já tinham refeito a maior parte das telas com `BosynText`. Sobravam a
+  conta, a tela de erro, o documento legal, o painel técnico e a calibração.
+- **Decisões do usuário:**
+  - Adicionar `flutter_localizations` (parte do SDK do Flutter, sem pacote de terceiros).
+  - Remover a tela de calibração.
+- **Decisões:**
+  - **Localização:** app em pt-BR (`locale`, `supportedLocales`,
+    `GlobalMaterialLocalizations.delegates`). Botão voltar, menus de texto e rótulos do leitor
+    de tela ficam em português.
+  - **Calibração removida (E4):** o valor gravado (`systemic_offset_ms`) não era lido por nada
+    desde a remoção do `spatial_controller` (Etapa 1), e a medida estava errada.
+    - Saíram a tela, o ícone da Home e a dependência `shared_preferences` (só ela usava).
+    - Tempo de reação, se um dia for usado, deve vir do onset nativo do `AudioGraph`.
+  - **Painel técnico (E5):** só em debug/profile. Em produção o toque longo não faz nada. Os
+    textos foram traduzidos e as fontes estão em 14 ou mais.
+  - **Fontes e cores:** fonte mínima 14 em todo `lib/`, e nenhum texto com white10/12/24/30/38.
+    Contornos de botões e campos usam `BosynText.outline` (#8A8A8A, ≥ 3:1, WCAG 1.4.11). Conta,
+    tela de erro de inicialização e documento legal passaram a 16 px em branco.
+  - **Fonte em 200% (G3):** as palavras da Fonêmica, os dígitos do teclado e os botões
+    "Ouvi/Não ouvi" encolhem dentro do botão (`FittedBox`). Todas as telas de treino já rolavam
+    desde as Etapas 6–7.
+  - **Leitor de tela (G4):** o cartão de palavra da Fonêmica (`GestureDetector`) ganhou
+    `Semantics(button, label)`. Os demais controles já tinham texto, tooltip ou rótulo.
+  - **Trava automática:** `tool/checks/check_accessibility.dart` no `verify_rules` (pre-commit e
+    CI) falha com `fontSize` < 14 e com cor fraca em `TextStyle`. Foi testado nos dois
+    sentidos: passa no código atual e reprova um arquivo de exemplo, depois apagado.
+- **Verificação:**
+  - `test/large_font_test.dart`: 360×640 com fonte em 200%, sem estouro de layout, para retorno,
+    4 opções + nível de ruído, teclado, resumo, Home (meta, evolução, cartão recomendado,
+    próximo passo) e teste de audição (instruções, resposta, resultado).
+  - `flutter analyze` limpo; `verify_rules` com 4 checagens, 0 avisos.
+- **Fora do escopo:**
+  - medida automática de contraste de cada par de cor (a trava cobre os padrões que reprovaram);
+  - revisão com TalkBack real, que fica para o checklist no celular.
+
 ## [2026-10-05] Plano "treino eficaz" — Etapa 10 (gamificação alinhada ao treino)
 - **Status:** accepted (aguardando CI + checklist no celular)
 - **Contexto (análise do treino + achado E3):**

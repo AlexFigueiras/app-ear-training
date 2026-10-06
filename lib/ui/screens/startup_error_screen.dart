@@ -43,7 +43,7 @@ class StartupErrorApp extends StatelessWidget {
                 const Text(
                   'Verifique sua conexão e tente novamente. Se o problema continuar, '
                   'atualize o app pela Google Play.',
-                  style: TextStyle(color: Colors.white38, fontSize: 12),
+                  style: TextStyle(color: Colors.white70, fontSize: 16),
                 ),
               ],
             ),

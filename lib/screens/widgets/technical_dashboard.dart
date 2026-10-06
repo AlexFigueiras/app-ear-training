@@ -20,7 +20,7 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
   int _xRuns = 0;
   int _limiterHits = 0;
   List<String> _pendingFiles = [];
-  String _socModel = "Detecting...";
+  String _socModel = "Identificando…";
 
   @override
   void initState() {
@@ -56,7 +56,7 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
       });
     } else {
       setState(() {
-        _socModel = "Desktop Environment";
+        _socModel = "Computador";
       });
     }
   }
@@ -83,7 +83,7 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("MODO ENGENHEIRO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 2)),
+              const Text("Painel técnico (só versão de teste)", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 2)),
               IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close, color: Colors.white54)),
             ],
           ),
@@ -98,7 +98,7 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
               children: [
                 const Icon(Icons.memory, color: Colors.blueAccent, size: 14),
                 const SizedBox(width: 8),
-                Text("SoC Hardware: $_socModel", style: const TextStyle(color: Colors.blueAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                Text("Aparelho: $_socModel", style: const TextStyle(color: Colors.blueAccent, fontSize: 14, fontWeight: FontWeight.bold)),
               ],
             ),
           ),
@@ -107,12 +107,12 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
           // Row 1: Hardware Metrics
           Row(
             children: [
-              _buildMetricCard("DSP LOAD", "${(_dspLoad * 100).toStringAsFixed(1)}%", _dspLoad > 0.8 ? Colors.redAccent : Colors.greenAccent),
+              _buildMetricCard("Carga do áudio", "${(_dspLoad * 100).toStringAsFixed(1)}%", _dspLoad > 0.8 ? Colors.redAccent : Colors.greenAccent),
               const SizedBox(width: 8),
-              _buildMetricCard("XRUNS", _xRuns.toString(), _xRuns > 0 ? Colors.orangeAccent : Colors.greenAccent),
+              _buildMetricCard("Falhas de áudio", _xRuns.toString(), _xRuns > 0 ? Colors.orangeAccent : Colors.greenAccent),
               const SizedBox(width: 8),
               // Acionamentos do limitador de segurança (-1 dBFS): numa sessão normal deve ficar 0.
-              _buildMetricCard("LIMITADOR", _limiterHits.toString(), _limiterHits > 0 ? Colors.orangeAccent : Colors.greenAccent),
+              _buildMetricCard("Limitador", _limiterHits.toString(), _limiterHits > 0 ? Colors.orangeAccent : Colors.greenAccent),
             ],
           ),
           const SizedBox(height: 16),
@@ -120,19 +120,19 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
           const SizedBox(height: 16),
           
           // Row 3: Persistence Sync
-          const Text("OFFLINE BACKLOG", style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
+          const Text("Dados ainda não enviados", style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Container(
             height: 100,
             width: double.infinity,
             decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8)),
             child: _pendingFiles.isEmpty 
-              ? const Center(child: Text("All Clean (Sync OK)", style: TextStyle(color: Colors.greenAccent, fontSize: 12)))
+              ? const Center(child: Text("Tudo enviado", style: TextStyle(color: Colors.greenAccent, fontSize: 14)))
               : ListView.builder(
                   itemCount: _pendingFiles.length,
                   itemBuilder: (context, i) => Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    child: Text(_pendingFiles[i], style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 10, fontFamily: 'monospace')),
+                    child: Text(_pendingFiles[i], style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 14, fontFamily: 'monospace')),
                   ),
                 ),
           ),
@@ -146,7 +146,7 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
                 _loadPendingFiles();
               },
               icon: const Icon(Icons.sync_problem),
-              label: const Text("FORCE SYNC NOW"),
+              label: const Text("Enviar agora"),
               style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white),
             ),
           ),
@@ -164,7 +164,7 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
+            Text(title, style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             Text(value, style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
           ],

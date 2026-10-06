@@ -3,6 +3,7 @@
 // (.githooks/pre-commit) e pelo CI (.github/workflows/ci.yml) — nunca uma versão divergente.
 import 'dart:io';
 
+import 'checks/check_accessibility.dart';
 import 'checks/check_file_size.dart';
 import 'checks/check_release_config.dart';
 import 'checks/check_result.dart';
@@ -13,6 +14,7 @@ Future<void> main() async {
     'check-file-size': checkFileSize,
     'check-secrets': checkSecrets,
     'check-release-config': checkReleaseConfig,
+    'check-accessibility': checkAccessibility,
   };
 
   final allResults = <CheckResult>[];
