@@ -11,11 +11,12 @@
 
 ## 1. Visão do projeto + princípios operacionais
 
-**O que é:** app Flutter de reabilitação auditiva baseada em plasticidade neural (marca de
-produto: BOSYN). Aplica audiogramas clínicos a testes de limiar tonal, discriminação fonêmica,
-atenção espacial e fala no ruído, com engine de áudio nativo (C++/Oboe via FFI) para DSP em
-baixa latência. Contexto clínico — ver `#PROJECT_BRAIN.md` (visão de produto/roadmap) e
-`docs/MASTER_PLAN.md` (SSOT de design/gamificação clínica).
+**O que é:** app Flutter de **treino auditivo** (marca de produto: BOSYN) para a percepção de
+consoantes agudas e da fala no ruído. Inclui teste de audição (triagem relativa), treinos de
+palavras parecidas, fala no ruído e voz/ruído em lados diferentes, além de uma medida de progresso
+(dígitos no ruído). O motor de áudio é nativo (C++/Oboe via FFI). **Não é dispositivo médico e não
+recupera a audição**; nunca prometer resultado clínico. Produto — ver `#PROJECT_BRAIN.md` (visão
+e roadmap) e `docs/MASTER_PLAN.md` (SSOT de treino, gamificação e design).
 
 **Princípios operacionais (transcritos do kit original, válidos aqui):**
 - **Boundaries explícitos > convenção implícita.** Regra que importa deve ser verificável por

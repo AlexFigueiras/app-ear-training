@@ -14,12 +14,12 @@
 ## Parâmetros do projeto
 
 ```yaml
-project_name:            "ear_training (BOSYN — Neural Plasticity-Based Auditory Rehabilitation App)"
+project_name:            "ear_training (BOSYN — app de treino auditivo)"
 description: >
-  App Flutter mobile de reabilitação auditiva com base em plasticidade neural: aplica
-  audiogramas clínicos a testes de limiar, discriminação fonêmica, atenção espacial e fala
-  no ruído, com engine de áudio nativo (C++/Oboe via FFI) para DSP em baixa latência.
-  Público: pacientes/fonoaudiólogos em contexto clínico (Técnico em Saúde Mental).
+  App Flutter mobile de treino auditivo (não é dispositivo médico): teste de audição como
+  triagem relativa, treinos de palavras parecidas, fala no ruído e voz/ruído em lados
+  diferentes, e medida de progresso por dígitos no ruído, com motor de áudio nativo
+  (C++/Oboe via FFI). Público: adultos e idosos com perda auditiva em agudos.
 target_scale:            "app mobile single-tenant (uma instalação = um paciente/clínica); sem SaaS multi-tenant"
 primary_stack:            "Flutter 3.x / Dart >=3.4.0 <4.0.0"
 runtime:                  "Flutter (Dart VM/AOT) + engine nativo C++ (Oboe/DSP) via FFI"

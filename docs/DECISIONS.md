@@ -1,8 +1,40 @@
 # DECISIONS — histórico vivo de decisões
 > Entradas no topo (mais recente primeiro). Estado do que existe fica em `docs/STATUS.md`.
 
+## [2026-10-05] Plano "treino eficaz" — Etapa 12 (documentação final + PR)
+- **Status:** accepted (PR aguardando aprovação do usuário)
+- **Contexto:** depois das Etapas 0–11, os documentos de produto ainda descreviam o app antigo:
+  - "reabilitação neural" e "restauração da audição";
+  - Energia Neural, XP com multiplicador e "nível de acuidade";
+  - "aviso de suporte à decisão clínica", que contradizia o posicionamento de não ser
+    dispositivo médico.
+- **Decisões:**
+  - **`docs/MASTER_PLAN.md` v2.0** reescrito como SSOT de produto: visão honesta (o treino não
+    recupera limiar; transferência modesta), regras de acessibilidade travadas por máquina,
+    tabela dos treinos, gamificação por esforço e desempenho, medida por dígitos no ruído, teste
+    de audição como triagem relativa, motor de áudio e pendências.
+  - Itens **removidos e proibidos de voltar** listados no próprio MASTER_PLAN (§4): Energia
+    Neural, XP por tipo de fonema, "acuidade" por XP e acerto bruto como medida de progresso.
+  - **`#PROJECT_BRAIN.md`**: visão, regras de ouro (evidência antes de efeito, áudio seguro,
+    acessibilidade travada), estado dos treinos e aviso de saúde. As seções de gestão de skills
+    ficaram como estavam.
+  - **`AGENTS.md`, `README.md` e `MASTER-PLAN.md`**: descrição do app trocada para "treino
+    auditivo, não é dispositivo médico".
+  - **`docs/STATUS.md`** consolidado: Etapas 11 e 12, e linhas que ainda diziam "vem na Etapa
+    N" ou citavam `shared_preferences` e a suíte de testes antiga.
+  - **Merge no `main`** só via PR e com aprovação do usuário. Recomendação: fazer antes o
+    checklist no celular das Etapas 2–11, que foi adiado.
+- **Consequências:**
+  - Os documentos agora batem com o código. Quem ler o MASTER_PLAN não reintroduz mecânica
+    removida por engano.
+  - A Etapa 13 (rebaixamento de frequência) continua em espera, só com validação de
+    fonoaudiólogo.
+- **Alternativas consideradas:** editar só os trechos errados do MASTER_PLAN antigo. Descartada:
+  o texto inteiro assumia Energia, XP e "reabilitação neural", e remendos deixariam
+  contradições.
+
 ## [2026-10-05] Plano "treino eficaz" — Etapa 11 (acessibilidade e linguagem)
-- **Status:** accepted (aguardando CI + checklist no celular)
+- **Status:** accepted (CI verde no run 37396697135; checklist no celular adiado)
 - **Contexto:** achados da auditoria de UX que ficaram com o plano:
   - **G1:** cores abaixo de AA.
   - **G2:** fontes < 12 px.

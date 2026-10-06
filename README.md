@@ -3,9 +3,15 @@
 ![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)
 <!-- Substitua OWNER/REPO pelo caminho real do repositório no GitHub. -->
 
-App Flutter mobile de reabilitação auditiva baseada em plasticidade neural. Aplica audiogramas
-clínicos a testes de limiar tonal, discriminação fonêmica, atenção espacial e fala no ruído, com
-engine de áudio nativo (C++/Oboe via FFI) para DSP em baixa latência.
+App Flutter de **treino auditivo** para a percepção de consoantes agudas e da fala no ruído.
+**Não é dispositivo médico e não recupera a audição.** O app tem:
+- teste de audição (triagem relativa);
+- três treinos adaptativos: palavras parecidas, conversa no barulho e voz de um lado com barulho
+  do outro;
+- medida de progresso por dígitos no ruído a cada 14 dias.
+
+O motor de áudio é nativo (C++/Oboe via FFI). Regras de produto em
+[`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md).
 
 > **Se você é uma IA (Claude, Gemini, Cursor, etc.), comece por [`AGENTS.md`](AGENTS.md)** — é a
 > fonte única de verdade deste repositório. Leia `docs/STATUS.md` antes de propor ou implementar
