@@ -1,21 +1,35 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/gamification_controller.dart';
 import '../../models/audiogram.dart';
 import '../../models/rehab_session.dart';
+import '../../screens/digits_in_noise_screen.dart';
+import '../../screens/hearing_test/hearing_test_flow.dart';
 import '../../screens/phonemic_discrimination_screen.dart';
+import '../../screens/progress_screen.dart';
 import '../../screens/spatial_attention_screen.dart';
 import '../../screens/speech_in_noise_screen.dart';
-import '../../screens/threshold_test_screen.dart';
 import '../../screens/widgets/technical_dashboard.dart';
+import '../../services/ads_service.dart';
+import '../../services/billing_service.dart';
 import '../../services/gatekeeper_service.dart';
 import '../../services/supabase_service.dart';
-import 'calibration_screen.dart';
+import '../../training/digits_in_noise.dart';
+import '../../training/progress_rules.dart';
+import 'account_screen.dart';
+import 'home/daily_goal_card.dart';
+import 'home/home_banner_ad.dart';
+import 'home/pro_gate.dart';
+import 'home/training_progress_section.dart';
+import 'home_widgets.dart';
 
-/// HOME SCREEN: Dashboard Central de Progressão [ORQUESTRADOR]
+/// Tela inicial: próximo passo, meta do dia, evolução por treino e os treinos (Etapa 10 do
+/// plano; achados E2/E3 da auditoria de UX). Quem não assina vê o banner no rodapé e pode
+/// liberar um treino PRO por assinatura ou vídeo (pro_gate.dart).
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -23,33 +37,39 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
-  bool _hasPermissions = false;
-  bool _isPermanentlyDenied = false;
+class _HomeScreenState extends State<HomeScreen> {
   bool _isLoadingData = true;
-
+  bool _hasPro = false;
+  int _seenPlanVersion = BillingService().planVersion;
   Audiogram? _audiogram;
   List<RehabSession> _rehabHistory = [];
+
+  static const _trainingOf = {
+    2: TrainingId.phonemic,
+    3: TrainingId.spatial,
+    4: TrainingId.cocktail,
+  };
 
   @override
   void initState() {
     super.initState();
-    _checkPermissions();
     _loadUserData();
-    WidgetsBinding.instance.addObserver(this);
+    BillingService().addListener(_onBillingChanged);
+    unawaited(BillingService().checkOnLaunch());
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
+    BillingService().removeListener(_onBillingChanged);
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _checkPermissions();
-    }
+  /// O servidor confirmou um plano (compra ou restauração): relê o acesso.
+  void _onBillingChanged() {
+    final version = BillingService().planVersion;
+    if (version == _seenPlanVersion || !mounted) return;
+    _seenPlanVersion = version;
+    _loadUserData();
   }
 
   Future<void> _loadUserData() async {
@@ -58,476 +78,228 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       setState(() => _isLoadingData = false);
       return;
     }
-
     try {
-      // Carrega audiograma, gamificação e histórico em paralelo
       final results = await Future.wait([
         SupabaseService().getPatientHistory(user.id),
         SupabaseService().loadGamificationData(),
         SupabaseService().getRehabHistory(user.id),
       ]);
-
       final audiograms = results[0] as List<Audiogram>;
       final gamData = results[1] as Map<String, dynamic>?;
       final history = results[2] as List<RehabSession>;
-
+      final hasPro = await GatekeeperService().checkAccess(3).catchError((_) => false);
       if (!mounted) return;
+      // Anúncio só para o plano grátis; quem assina nunca liga o SDK do AdMob.
+      if (!hasPro) unawaited(AdsService().start());
+
       final controller = context.read<GamificationController>();
-
-      // Restaura estado de gamificação persistido
-      if (gamData != null) {
-        controller.fromMap(gamData);
-      }
-
-      // Calcula streak real com base no histórico de sessões
-      _calculateStreak(history, controller);
-
-      // Conta sessões de hoje para exibir progresso diário
-      final today = DateTime.now();
-      final sessionsToday = history.where((s) =>
-        s.date.year == today.year &&
-        s.date.month == today.month &&
-        s.date.day == today.day
-      ).length;
-      controller.setSessionsCompletedToday(sessionsToday);
+      if (gamData != null) controller.fromMap(gamData);
+      // Progresso do dia sempre recalculado do histórico (a sequência antiga subia a cada
+      // abertura da Home; achado E3).
+      final now = DateTime.now();
+      controller.setDailyProgress(
+        minutesToday: ProgressRules.minutesOn(history, now),
+        streakDays: ProgressRules.streakDays(history, now),
+        goalDaysThisWeek: ProgressRules.goalDaysThisWeek(history, now),
+      );
 
       setState(() {
         _audiogram = audiograms.isNotEmpty ? audiograms.first : null;
         _rehabHistory = history;
+        _hasPro = hasPro;
         _isLoadingData = false;
       });
     } catch (e) {
       debugPrint("[HOME] Erro ao carregar dados: $e");
-      setState(() => _isLoadingData = false);
+      if (mounted) setState(() => _isLoadingData = false);
     }
-  }
-
-  void _calculateStreak(List<RehabSession> history, GamificationController controller) {
-    if (history.isEmpty) {
-      controller.updateStreak(0);
-      return;
-    }
-
-    final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
-    final lastSessionDate = DateTime(history.last.date.year, history.last.date.month, history.last.date.day);
-    final diff = today.difference(lastSessionDate).inDays;
-
-    if (diff > 1) {
-      // Mais de 1 dia sem treinar → reinicia streak
-      controller.updateStreak(0);
-    } else if (diff == 1) {
-      // Treinou ontem → incrementa streak
-      controller.updateStreak(controller.currentStreak + 1);
-    }
-    // diff == 0 → treinou hoje → mantém streak atual
-  }
-
-  Future<void> _checkPermissions() async {
-    final mic = await Permission.microphone.status;
-    final bluetooth = await Permission.bluetoothConnect.status;
-    setState(() {
-      _hasPermissions = mic.isGranted && bluetooth.isGranted;
-      _isPermanentlyDenied = mic.isPermanentlyDenied || bluetooth.isPermanentlyDenied;
-    });
-  }
-
-  Future<void> _requestPermissions() async {
-    await [Permission.microphone, Permission.bluetoothConnect].request();
-    _checkPermissions();
   }
 
   Future<void> _navigateToLevel(BuildContext context, int level) async {
-    // Se não tiver audiograma, conduz ao teste primeiro
-    if (_audiogram == null) {
+    final audiogram = _audiogram;
+    if (audiogram == null) {
       final doTest = await showDialog<bool>(
         context: context,
         builder: (_) => AlertDialog(
-          backgroundColor: const Color(0xFF1E1E24),
-          title: const Text("Teste Auditivo Necessário", style: TextStyle(color: Colors.white)),
+          title: const Text("Primeiro, o teste de audição"),
           content: const Text(
-            "Para personalizar seu treino, realize o teste auditivo primeiro.",
-            style: TextStyle(color: Colors.white70),
+            "O treino é ajustado ao seu jeito de ouvir. O teste leva uns 10 minutos; use fones de ouvido num lugar silencioso.",
+            style: TextStyle(fontSize: 16, height: 1.4),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancelar")),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text("Fazer Teste", style: TextStyle(color: Color(0xFF00FF41))),
-            ),
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Agora não")),
+            TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Fazer o teste")),
           ],
         ),
       );
-
-      if (doTest == true && context.mounted) {
-        final result = await Navigator.of(context).push<Map<String, dynamic>>(
-          MaterialPageRoute(builder: (_) => const ThresholdTestScreen()),
-        );
-        if (result != null && context.mounted) {
-          final user = Supabase.instance.client.auth.currentUser;
-          if (user != null) {
-            final leftEar = List<AudiometryPoint>.from(result['left'] as List);
-            final rightEar = List<AudiometryPoint>.from(result['right'] as List);
-            final audiogram = Audiogram(
-              id: '',
-              patientId: user.id,
-              date: DateTime.now(),
-              leftEar: leftEar,
-              rightEar: rightEar,
-            );
-            await SupabaseService().saveAudiogram(audiogram);
-            setState(() => _audiogram = audiogram);
-          }
-        }
-      }
+      if (doTest == true && context.mounted) await _runHearingTest();
       return;
     }
 
     final hasAccess = await GatekeeperService().checkAccess(level);
     if (!context.mounted) return;
-
     if (!hasAccess) {
-      _showPaywall(context);
-      return;
+      final title = TrainingLevel.all.firstWhere((t) => t.level == level).title;
+      final unlocked = await offerProSession(context, trainingTitle: title);
+      if (!unlocked || !context.mounted) return;
     }
+    await _open(switch (level) {
+      2 => PhonemicDiscriminationScreen(audiogram: audiogram),
+      3 => SpatialAttentionScreen(audiogram: audiogram),
+      _ => SpeechInNoiseScreen(audiogram: audiogram),
+    });
+  }
 
-    Widget screen;
-    switch (level) {
-      case 2:
-        screen = PhonemicDiscriminationScreen(audiogram: _audiogram!);
-        break;
-      case 3:
-        screen = SpatialAttentionScreen(audiogram: _audiogram!);
-        break;
-      case 4:
-      default:
-        screen = SpeechInNoiseScreen(audiogram: _audiogram!);
-        break;
-    }
+  /// Abre o teste de audição e salva o resultado (HearingTestFlow, Etapa 4).
+  Future<void> _runHearingTest() async {
+    final audiogram = await HearingTestFlow.runAndSave(context);
+    if (audiogram != null && mounted) setState(() => _audiogram = audiogram);
+  }
 
+  /// Abre uma tela e recarrega os dados da Home ao voltar.
+  Future<void> _open(Widget screen) async {
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
-    // Recarrega dados após retornar do treino
     if (mounted) _loadUserData();
+  }
+
+  TrainingId _recommended(GamificationController c) => ProgressRules.recommend(
+        levels: {for (final t in TrainingId.values) t: c.levelOf(t)},
+        hasPro: _hasPro,
+      );
+
+  /// Próximo passo: teste de audição (sem ou antigo), medida a cada 14 dias, ou o treino
+  /// recomendado enquanto a meta do dia não foi cumprida.
+  Widget? _buildNextStep(GamificationController controller) {
+    final audiogram = _audiogram;
+    if (audiogram == null) {
+      return NextStepCard(
+        title: 'Comece pelo teste de audição',
+        body: 'Leva uns 10 minutos e ajusta o treino ao seu jeito de ouvir. '
+            'Use fones de ouvido num lugar silencioso.',
+        actionLabel: 'Fazer o teste agora',
+        onPressed: _runHearingTest,
+      );
+    }
+    if (audiogram.isOutdated) {
+      return NextStepCard(
+        title: 'Refaça o teste de audição',
+        body: 'O teste foi melhorado e agora mede também os sons mais agudos. '
+            'Seu resultado atual é da versão antiga e pode estar errado. Leva uns 10 minutos.',
+        actionLabel: 'Refazer o teste agora',
+        onPressed: _runHearingTest,
+      );
+    }
+    if (DinProcedure.isDue(_rehabHistory)) {
+      return NextStepCard(
+        title: 'Hora de medir sua audição na fala',
+        body: 'A cada 14 dias, um teste de uns 4 minutos mostra se você está entendendo melhor '
+            'a fala no barulho.',
+        actionLabel: 'Medir agora',
+        onPressed: () => _open(DigitsInNoiseScreen(audiogram: audiogram)),
+      );
+    }
+    if (!controller.dailyGoalMet) {
+      final t = _recommended(controller);
+      final left = ProgressRules.minutesLeftToday(controller.minutesToday);
+      return NextStepCard(
+        title: 'Treino de hoje: ${t.title}',
+        body: 'Faltam $left min para a meta de hoje. Uma sessão leva uns 10 minutos.',
+        actionLabel: 'Começar',
+        onPressed: () => _navigateToLevel(context, _trainingOf.entries.firstWhere((e) => e.value == t).key),
+      );
+    }
+    return null;
+  }
+
+  String? _progressLine(GamificationController c, TrainingId t) {
+    final level = c.levelOf(t);
+    return level == null ? null : 'Nível $level de ${t.maxLevel} · ${ProgressRules.stageName(level, t.maxLevel)}';
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_hasPermissions) return _buildPermissionGuard();
-
     final controller = context.watch<GamificationController>();
+    final nextStep = _isLoadingData ? null : _buildNextStep(controller);
+    final recommended = _recommended(controller);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0A),
+      bottomNavigationBar: _isLoadingData || _hasPro ? null : const HomeBannerAd(),
       body: SafeArea(
         child: _isLoadingData
-            ? const Center(child: CircularProgressIndicator(color: Color(0xFF00FF41)))
-            : Padding(
+            ? const Center(child: CircularProgressIndicator(color: HomeColors.accent))
+            : ListView(
+                // Rolável: em 360×640 ou com fonte grande nada fica cortado (achados E2/G3).
                 padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    GestureDetector(
-                      onLongPress: () {
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (_) => const TechnicalDashboard(),
-                        );
-                      },
-                      child: _buildMainHeader(controller),
-                    ),
-                    const SizedBox(height: 20),
-                    _buildProgressCard(controller),
-                    const SizedBox(height: 20),
-                    _buildDailyProgress(controller),
-                    const SizedBox(height: 16),
-                    const Text(
-                      "EVOLUÇÃO DA ACUIDADE (ÚLTIMAS SESSÕES)",
-                      style: TextStyle(color: Colors.white24, fontSize: 10, letterSpacing: 2),
+                children: [
+                  _header(),
+                  const SizedBox(height: 20),
+                  if (nextStep != null) ...[nextStep, const SizedBox(height: 20)],
+                  DailyGoalCard(
+                    minutesToday: controller.minutesToday,
+                    streakDays: controller.streakDays,
+                    goalDaysThisWeek: controller.goalDaysThisWeek,
+                    points: controller.trainingPoints,
+                  ),
+                  const SizedBox(height: 24),
+                  const Text('Sua evolução',
+                      style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 12),
+                  TrainingProgressSection(history: _rehabHistory),
+                  const SizedBox(height: 12),
+                  for (final level in TrainingLevel.all) ...[
+                    LevelCard(
+                      level: level,
+                      locked: level.level > 2 && !_hasPro,
+                      recommended: _audiogram != null && _trainingOf[level.level] == recommended,
+                      progressLine: _progressLine(controller, _trainingOf[level.level]!),
+                      onTap: () => _navigateToLevel(context, level.level),
                     ),
                     const SizedBox(height: 12),
-                    _buildEvolutionChart(),
-                    const Spacer(),
-                    _buildStartButton(context),
                   ],
-                ),
+                  _linkButton(Icons.insights, 'Meu progresso', () => _open(const ProgressScreen())),
+                  if (_audiogram != null && !_audiogram!.isOutdated)
+                    _linkButton(Icons.hearing, 'Refazer teste de audição', _runHearingTest),
+                ],
               ),
       ),
     );
   }
 
-  Widget _buildPermissionGuard() {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(40.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.security, color: Color(0xFFE11D48), size: 64),
-              const SizedBox(height: 24),
-              const Text("ACESSO RESTRITO", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 4)),
-              const SizedBox(height: 16),
-              Text(
-                "A reabilitação neural exige acesso ao Microfone (para calibração) e ao Bluetooth (detecção de fones).",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12),
-              ),
-              const SizedBox(height: 40),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB), foregroundColor: Colors.white),
-                  onPressed: _isPermanentlyDenied ? openAppSettings : _requestPermissions,
-                  child: Text(_isPermanentlyDenied ? "ABRIR CONFIGURAÇÕES" : "AUTORIZAR ACESSO"),
-                ),
-              ),
-              if (_isPermanentlyDenied)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Text(
-                    "Acesso negado permanentemente. Habilite manualmente.",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.redAccent.withOpacity(0.7), fontSize: 10),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMainHeader(GamificationController controller) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("BOSYN — REABILITAÇÃO NEURAL", style: TextStyle(color: Colors.white38, letterSpacing: 5, fontSize: 10)),
-            const SizedBox(height: 8),
-            Text("STATUS: ${controller.acuityLevel}", style: const TextStyle(color: Color(0xFF00FF41), fontSize: 24, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
-            Container(height: 2, width: 120, color: const Color(0xFF00FF41).withOpacity(0.5)),
-          ],
-        ),
-        Row(
-          children: [
-            if (_audiogram == null)
-              IconButton(
-                onPressed: () async {
-                  final user = Supabase.instance.client.auth.currentUser;
-                  final result = await Navigator.of(context).push<Map<String, dynamic>>(
-                    MaterialPageRoute(builder: (_) => const ThresholdTestScreen()),
-                  );
-                  if (result != null && user != null && mounted) {
-                    final leftEar = List<AudiometryPoint>.from(result['left'] as List);
-                    final rightEar = List<AudiometryPoint>.from(result['right'] as List);
-                    final audiogram = Audiogram(id: '', patientId: user.id, date: DateTime.now(), leftEar: leftEar, rightEar: rightEar);
-                    await SupabaseService().saveAudiogram(audiogram);
-                    setState(() => _audiogram = audiogram);
-                  }
-                },
-                icon: const Icon(Icons.hearing, color: Color(0xFFFFBF00)),
-                tooltip: "Realizar Teste Auditivo",
-              ),
-            IconButton(
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CalibrationScreen())),
-              icon: const Icon(Icons.tune, color: Colors.white24),
-              tooltip: "Calibrar Latência",
+  Widget _header() => Row(children: [
+        Expanded(
+          child: GestureDetector(
+            // Painel técnico (QA de áudio) por toque longo, como antes.
+            // Painel técnico (QA de áudio) só nas versões de teste: em produção o paciente não cai
+            // nele por um toque longo sem querer (achado E5).
+            onLongPress: kReleaseMode
+                ? null
+                : () => showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => const TechnicalDashboard(),
+                    ),
+            child: Semantics(
+              header: true,
+              child: const Text('BOSYN · Treino auditivo',
+                  style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
             ),
-          ],
+          ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildProgressCard(GamificationController controller) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: const Color(0xFF1A1A1A), border: Border.all(color: Colors.white12)),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("XP ACUMULADO", style: TextStyle(color: Colors.white38, fontSize: 8)),
-              Text(controller.totalXP.toString().padLeft(6, '0'), style: const TextStyle(color: Colors.white, fontSize: 24, fontFamily: 'monospace')),
-            ],
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              const Text("STREAK", style: TextStyle(color: Colors.white38, fontSize: 8)),
-              Text(
-                "${controller.currentStreak} dias",
-                style: const TextStyle(color: Color(0xFF00FF41), fontSize: 16, fontFamily: 'monospace'),
-              ),
-            ],
-          ),
-          const Icon(Icons.show_chart, color: Color(0xFF2563EB), size: 36),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDailyProgress(GamificationController controller) {
-    final sessions = controller.sessionsCompletedToday;
-    final color = sessions >= 2 ? const Color(0xFF00FF41) : const Color(0xFF2563EB);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF111111),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            "SESSÕES HOJE: $sessions / 2",
-            style: TextStyle(color: color, fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold),
-          ),
-          if (controller.recommendRest)
-            const Text("META DIÁRIA ATINGIDA ✓", style: TextStyle(color: Color(0xFF00FF41), fontSize: 9, letterSpacing: 1)),
-          if (!controller.recommendRest)
-            Text(
-              "${2 - sessions} sessão(ões) restante(s)",
-              style: const TextStyle(color: Colors.white24, fontSize: 9),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEvolutionChart() {
-    final recent = _rehabHistory.length > 10 ? _rehabHistory.sublist(_rehabHistory.length - 10) : _rehabHistory;
-    final spots = <FlSpot>[];
-    for (int i = 0; i < recent.length; i++) {
-      spots.add(FlSpot(i.toDouble(), recent[i].accuracy.clamp(0.0, 100.0)));
-    }
-    if (spots.isEmpty) spots.add(const FlSpot(0, 0));
-
-    return Container(
-      height: 180,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: const Color(0xFF1A1A1A), border: Border.all(color: Colors.white12)),
-      child: LineChart(
-        LineChartData(
-          gridData: const FlGridData(show: true, drawVerticalLine: false, horizontalInterval: 25),
-          titlesData: FlTitlesData(
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 30,
-                interval: 25,
-                getTitlesWidget: (v, _) => Text("${v.toInt()}%", style: const TextStyle(color: Colors.white24, fontSize: 8)),
-              ),
-            ),
-            bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          ),
-          borderData: FlBorderData(show: false),
-          minX: 0,
-          maxX: (spots.length - 1).toDouble().clamp(1, double.infinity),
-          minY: 0,
-          maxY: 100,
-          lineBarsData: [
-            LineChartBarData(
-              spots: spots,
-              isCurved: true,
-              color: const Color(0xFF00FF41),
-              barWidth: 3,
-              isStrokeCapRound: true,
-              dotData: const FlDotData(show: true),
-              belowBarData: BarAreaData(show: true, color: const Color(0xFF00FF41).withOpacity(0.1)),
-            ),
-          ],
+        IconButton(
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AccountScreen())),
+          icon: const Icon(Icons.account_circle_outlined, color: HomeColors.textSecondary),
+          tooltip: "Conta e privacidade",
         ),
-      ),
-    );
-  }
+      ]);
 
-  Widget _buildStartButton(BuildContext context) {
-    return Column(
-      children: [
-        _buildLevelCard(context, 2, "CALIBRAÇÃO FONÊMICA", "ACESSO LIBERADO"),
-        const SizedBox(height: 12),
-        _buildLevelCard(context, 3, "ESCALONAMENTO ESPACIAL", "REQUER PRO", isLocked: true),
-        const SizedBox(height: 12),
-        _buildLevelCard(context, 4, "AMBIENTE HOSTIL [COQUETEL]", "REQUER PRO", isLocked: true),
-      ],
-    );
-  }
-
-  Widget _buildLevelCard(BuildContext context, int level, String title, String subtitle, {bool isLocked = false}) {
-    return InkWell(
-      onTap: () => _navigateToLevel(context, level),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF111111),
-          border: Border.all(color: isLocked ? Colors.white10 : const Color(0xFF2563EB).withOpacity(0.3)),
+  Widget _linkButton(IconData icon, String label, VoidCallback onPressed) => Center(
+        child: TextButton.icon(
+          style: TextButton.styleFrom(minimumSize: const Size(48, 48), foregroundColor: HomeColors.textSecondary),
+          onPressed: onPressed,
+          icon: Icon(icon),
+          label: Text(label, style: const TextStyle(fontSize: 16)),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: TextStyle(color: isLocked ? Colors.white38 : Colors.white, fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
-                Text(subtitle, style: TextStyle(color: isLocked ? const Color(0xFFE11D48) : const Color(0xFF00FF41), fontSize: 8)),
-              ],
-            ),
-            Icon(isLocked ? Icons.lock_outline : Icons.play_arrow, color: isLocked ? Colors.white10 : const Color(0xFF00FF41), size: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showPaywall(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1A1A1A),
-      shape: const BeveledRectangleBorder(),
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("BOSYN PRO REQUERIDO", style: TextStyle(color: Color(0xFF00FF41), fontSize: 20, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
-              const SizedBox(height: 12),
-              const Text(
-                "O treinamento avançado de Escalonamento Espacial e Efeito Coquetel exige processamento neural de alta densidade.",
-                style: TextStyle(color: Colors.white70, fontSize: 12),
-              ),
-              const SizedBox(height: 30),
-              SizedBox(
-                width: double.infinity,
-                height: 60,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB), foregroundColor: Colors.white, shape: const BeveledRectangleBorder()),
-                  onPressed: () async {
-                    debugPrint("Iniciando Stripe Checkout...");
-                    await Future.delayed(const Duration(seconds: 2));
-                    await GatekeeperService().upgradeToPro();
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("ACESSO ELITE ATIVADO!")));
-                    }
-                  },
-                  child: const Text("ATIVAR ACESSO ELITE", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+      );
 }

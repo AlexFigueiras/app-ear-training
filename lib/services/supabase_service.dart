@@ -1,5 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../core/app_config.dart';
 import '../models/audiogram.dart';
 import '../models/rehab_session.dart';
 
@@ -15,13 +16,39 @@ class SupabaseService {
   Future<void> initialize() async {
     if (_isInitialized) return;
 
+    // Valores validados no boot por AppConfig.validate() (main.dart) antes de chegar aqui.
     await Supabase.initialize(
-      url: dotenv.env['SUPABASE_URL'] ?? '',
-      anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
+      url: AppConfig.supabaseUrl,
+      publishableKey: AppConfig.supabasePublishableKey,
     );
 
     _isInitialized = true;
-    print("Supabase Iniciado com SUCESSO.");
+    debugPrint("Supabase Iniciado com SUCESSO.");
+  }
+
+  /// Garante a linha do usuário em `profiles` e diz se o onboarding já foi concluído.
+  /// No cadastro, quem cria o perfil é o trigger do banco (supabase_migration_003_security.sql);
+  /// o insert aqui cobre contas criadas antes dele. `subscription_status` é forçado a 'free'
+  /// pelo banco para o cliente — o app não decide o próprio plano.
+  Future<bool> loadOnboardingCompleted() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return false;
+
+    final profile = await Supabase.instance.client
+        .from('profiles')
+        .select('onboarding_completed')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+    if (profile == null) {
+      await Supabase.instance.client.from('profiles').insert({
+        'user_id': user.id,
+        'subscription_status': 'free',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+      return false;
+    }
+    return profile['onboarding_completed'] == true;
   }
 
   /// Salva um novo Audiograma [SEGURANÇA]

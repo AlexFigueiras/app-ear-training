@@ -16,18 +16,23 @@ set(CMAKE_CXX_STANDARD 17)
 # Adiciona a biblioteca compartilhada (JNI/FFI)
 add_library(dsp_audio_engine SHARED
     native_bridge.cpp
-    dsp_engine.cpp
+    audio_graph.cpp
     oboe_engine.cpp
-    fir_filter.cpp
-    pffft.c
 )
 
-# OTIMIZAÇÃO DE HARDWARE (ARM NEON & -O3) PARA PFFFT
-# Ativando flags de vetorização SIMD mandatórias
+# Otimização: -O3 (e NEON no ARMv7) para o EQ de biquads no callback de áudio.
 if(${ANDROID_ABI} STREQUAL "armeabi-v7a")
     target_compile_options(dsp_audio_engine PRIVATE -O3 -mfpu=neon)
 else()
     target_compile_options(dsp_audio_engine PRIVATE -O3)
+endif()
+
+# Google Play exige .so com segmentos ELF alinhados a 16 KB (Android 15+). O NDK r28+ já faz
+# isso por padrão; o flag explícito mantém a garantia se o build cair num NDK mais antigo.
+if(ANDROID)
+    target_link_options(dsp_audio_engine PRIVATE
+        "-Wl,-z,max-page-size=16384"
+        "-Wl,-z,common-page-size=16384")
 endif()
 
 # Pesquisa pela biblioteca de log do Android

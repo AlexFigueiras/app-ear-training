@@ -1,0 +1,270 @@
+<title>Folha de Respostas BOSYN</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;600&family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,600;0,800;1,400&display=swap">
+<style>
+  /* Layout: manual de bancada — índice fixo à esquerda (tela larga), um cartão por formulário da Play Console, rótulo | valor | Copiar. */
+  :root {
+    --bg: #F3F5F9; --panel: #FFFFFF; --ink: #0F172A; --muted: #4A5568; --line: #D8DEE8;
+    --accent: #1D4ED8; --accent-ink: #FFFFFF; --ok: #0E7A3C; --code: #EEF2F8;
+    --f-display: "Atkinson Hyperlegible Next", "Segoe UI", system-ui, sans-serif;
+    --f-body: "Atkinson Hyperlegible Next", "Segoe UI", system-ui, sans-serif;
+    --f-mono: "Atkinson Hyperlegible Mono", ui-monospace, "Cascadia Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg: #0B1120; --panel: #111A2E; --ink: #E8EDF6; --muted: #A9B4C6; --line: #26324A;
+    --accent: #7FA6FF; --accent-ink: #0B1120; --ok: #4ADE80; --code: #18223A; color-scheme: dark;
+  } }
+  :root[data-theme="dark"] {
+    --bg: #0B1120; --panel: #111A2E; --ink: #E8EDF6; --muted: #A9B4C6; --line: #26324A;
+    --accent: #7FA6FF; --accent-ink: #0B1120; --ok: #4ADE80; --code: #18223A; color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); font: 17px/1.55 var(--f-body);
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .wrap { max-width: 1120px; margin: 0 auto; padding-block: 28px 64px; display: grid; gap: 28px; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { .wrap { grid-template-columns: 240px minmax(0, 1fr); } nav { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); align-self: start; } }
+  .top { grid-column: 1 / -1; display: grid; gap: 10px; }
+  .eyebrow { font: 600 13px/1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  h1 { font: 800 clamp(28px, 5vw, 40px)/1.1 var(--f-display); margin: 0; text-wrap: balance; }
+  .lede { margin: 0; max-width: 68ch; color: var(--muted); }
+  .meter { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .bar { flex: 1 1 220px; height: 10px; border-radius: 99px; background: var(--line); overflow: hidden; max-width: 420px; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .3s; }
+  .count { font: 600 15px var(--f-mono); font-variant-numeric: tabular-nums; }
+  nav ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: s; }
+  nav li { counter-increment: s; }
+  nav a { display: flex; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink); text-decoration: none; font-size: 15px; }
+  nav a::before { content: counter(s, decimal-leading-zero); font: 600 13px var(--f-mono); color: var(--muted); padding-top: 2px; }
+  nav a:hover, nav a:focus-visible { background: var(--panel); outline: none; box-shadow: inset 0 0 0 2px var(--accent); }
+  nav a.is-done { color: var(--muted); text-decoration: line-through; }
+  @media (max-width: 899px) { nav { display: none; } }
+  main { display: grid; gap: 18px; min-width: 0; }
+  .form { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; scroll-margin-top: 16px; }
+  .form.is-done { border-color: var(--ok); }
+  .fh { display: flex; gap: 14px; align-items: flex-start; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+  .fh h2 { font: 800 21px/1.25 var(--f-display); margin: 2px 0 0; text-wrap: balance; }
+  .where { margin: 0; font: 400 14px/1.4 var(--f-mono); color: var(--muted); overflow-wrap: anywhere; }
+  .done { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 14px; flex: none; padding: 6px 10px; border: 1px solid var(--line); border-radius: 99px; cursor: pointer; }
+  .done input { width: 20px; height: 20px; accent-color: var(--ok); margin: 0; }
+  .fb { padding: 14px 18px 18px; display: grid; gap: 12px; min-width: 0; }
+  .row { display: grid; gap: 6px 10px; grid-template-columns: minmax(0, 1fr) auto; align-items: start; min-width: 0; }
+  .row > .fld { grid-column: 1 / -1; }
+  .row:has(.ans) { grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 640px) {
+    .row { grid-template-columns: 200px minmax(0, 1fr) auto; column-gap: 14px; }
+    .row > .fld { grid-column: auto; }
+    .row:has(.ans) { grid-template-columns: 200px minmax(0, 1fr); }
+  }
+  .fld { font-weight: 600; color: var(--muted); font-size: 15px; padding-top: 6px; }
+  .val { margin: 0; padding: 8px 12px; background: var(--code); border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; font: 16px/1.5 var(--f-body); min-width: 0; }
+  .val.mono { font-family: var(--f-mono); font-size: 15px; }
+  .val.big { max-height: 320px; overflow: auto; }
+  .ans { margin: 0; padding-top: 6px; min-width: 0; max-width: 70ch; }
+  .cp { font: 600 15px var(--f-body); padding: 8px 14px; min-height: 40px; border-radius: 8px; border: 0; background: var(--accent); color: var(--accent-ink); cursor: pointer; justify-self: start; }
+  .cp:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  .cp.ok { background: var(--ok); color: var(--accent-ink); }
+  .note { margin: 0; font-size: 15px; color: var(--muted); max-width: 72ch; }
+  .steps { margin: 0; padding-left: 22px; display: grid; gap: 4px; max-width: 72ch; }
+  .tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; min-width: 560px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th { font: 600 13px var(--f-mono); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); background: var(--code); }
+  tbody th { font-weight: 600; }
+  tr:last-child > * { border-bottom: 0; }
+  code { font: 14px var(--f-mono); background: var(--code); padding: 1px 5px; border-radius: 5px; overflow-wrap: anywhere; }
+  b { font-weight: 800; }
+  @media (prefers-reduced-motion: reduce) { .bar > i { transition: none; } }
+</style>
+<div class="wrap">
+  <header class="top">
+    <p class="eyebrow">Play Console · com.bosyn.app</p>
+    <h1>Folha de Respostas do BOSYN</h1>
+    <p class="lede">Deixe esta página aberta ao lado da Play Console. Cada cartão é um formulário, na ordem em que eles aparecem. Copie, cole e confira no print antes de salvar: as telas da Google mudam com o tempo. Marque "Feito" ao terminar; a marcação fica só neste navegador.</p>
+    <div class="meter"><div class="bar" aria-hidden="true"><i id="bar"></i></div><span class="count" id="count">0 de 0 feitos</span></div>
+  </header>
+  <nav aria-label="Formulários"><ol><li><a href="#dados">Dados do BOSYN</a></li><li><a href="#criar">Criar o app</a></li><li><a href="#politica">Política</a></li><li><a href="#acesso">Acesso ao app</a></li><li><a href="#anuncios">Anúncios</a></li><li><a href="#classificacao">Classificação</a></li><li><a href="#publico">Público-alvo</a></li><li><a href="#seguranca">Segurança dos dados</a></li><li><a href="#saude">Apps de saúde</a></li><li><a href="#adid">ID de publicidade</a></li><li><a href="#outros">Outras declarações</a></li><li><a href="#loja-config">Configurações da loja</a></li><li><a href="#pagina">Página da loja</a></li><li><a href="#assinatura">Assinaturas</a></li><li><a href="#versao">Versão e envio</a></li></ol></nav>
+  <main>
+<section class="form" id="dados">
+  <header class="fh">
+    <label class="done"><input type="checkbox" id="ok-dados" data-step="dados"><span>Feito</span></label>
+    <div><p class="where">Para ter à mão</p><h2>Dados do BOSYN</h2></div>
+  </header>
+  <div class="fb"><div class="row"><span class="fld">Nome do app</span><pre class="val" id="c1">BOSYN: Treino Auditivo</pre><button type="button" class="cp" data-target="c1">Copiar</button></div><div class="row"><span class="fld">Nome do pacote</span><pre class="val mono" id="c2">com.bosyn.app</pre><button type="button" class="cp" data-target="c2">Copiar</button></div><div class="row"><span class="fld">E-mail de contato</span><pre class="val mono" id="c3">contato@bosyn.com.br</pre><button type="button" class="cp" data-target="c3">Copiar</button></div><div class="row"><span class="fld">Site</span><pre class="val mono" id="c4">https://alexfigueiras.github.io</pre><button type="button" class="cp" data-target="c4">Copiar</button></div><div class="row"><span class="fld">Política de privacidade</span><pre class="val mono" id="c5">https://alexfigueiras.github.io/politica-bosyn.html</pre><button type="button" class="cp" data-target="c5">Copiar</button></div><div class="row"><span class="fld">Exclusão de conta</span><pre class="val mono" id="c6">https://alexfigueiras.github.io/exclusao-de-conta-bosyn.html</pre><button type="button" class="cp" data-target="c6">Copiar</button></div><p class="note">As duas páginas só entram no ar depois que os campos [PREENCHER] da política forem preenchidos (docs/PLAY_STORE.md, seção 6). Abra cada link numa janela anônima antes de colar.</p></div>
+</section>
+<section class="form" id="criar">
+  <header class="fh">
+    <label class="done"><input type="checkbox" id="ok-criar" data-step="criar"><span>Feito</span></label>
+    <div><p class="where">Todos os apps → Criar app</p><h2>Criar o app</h2></div>
+  </header>
+  <div class="fb"><div class="row"><span class="fld">Nome do app</span><pre class="val" id="c7">BOSYN: Treino Auditivo</pre><button type="button" class="cp" data-target="c7">Copiar</button></div><div class="row"><span class="fld">Idioma padrão</span><p class="ans"><b>Português (Brasil) – pt-BR</b></p></div><div class="row"><span class="fld">App ou jogo</span><p class="ans"><b>App</b></p></div><div class="row"><span class="fld">Sem custo ou pago</span><p class="ans"><b>Sem custo financeiro</b>. O app é gratuito, com assinatura opcional dentro dele. Um app gratuito não pode virar pago depois.</p></div><div class="row"><span class="fld">Declarações</span><p class="ans">Marque as caixas das políticas do programa e das leis de exportação dos EUA e clique em <b>Criar app</b>.</p></div></div>
+</section>
+<section class="form" id="politica">
+  <header class="fh">
+    <label class="done"><input type="checkbox" id="ok-politica" data-step="politica"><span>Feito</span></label>
+    <div><p class="where">Painel → Configurar o app</p><h2>Política de privacidade</h2></div>
+  </header>
+  <div class="fb"><div class="row"><span class="fld">URL</span><pre class="val mono" id="c8">https://alexfigueiras.github.io/politica-bosyn.html</pre><button type="button" class="cp" data-target="c8">Copiar</button></div></div>
+</section>
+<section class="form" id="acesso">
+  <header class="fh">
+    <label class="done"><input type="checkbox" id="ok-acesso" data-step="acesso"><span>Feito</span></label>
+    <div><p class="where">Painel → Configurar o app → Acesso ao app</p><h2>Acesso ao app (login)</h2></div>
+  </header>
+  <div class="fb"><div class="row"><span class="fld">Opção</span><p class="ans"><b>Todas ou algumas funções do app são restritas</b> e precisam de login.</p></div><div class="row"><span class="fld">Conta de revisão</span><p class="ans">Crie pelo app uma conta só para a revisão, confirme o e-mail e dê PRO a ela no SQL do Supabase (docs/PLAY_STORE.md, seção 4). Digite o e-mail e a senha direto na Play Console: a senha não passa por esta página nem pela conversa.</p></div><div class="row"><span class="fld">Instruções (em inglês, para o revisor)</span><pre class="val" id="c9">Sign in with the review account below (email and password). The account has the PRO plan enabled, so every training is unlocked. Please use headphones: the hearing test and the trainings play audio. No other credentials or codes are needed.</pre><button type="button" class="cp" data-target="c9">Copiar</button></div></div>
+</section>
+<section class="form" id="anuncios">
+  <header class="fh">
+    <label class="done"><input type="checkbox" id="ok-anuncios" data-step="anuncios"><span>Feito</span></label>
+    <div><p class="where">Painel → Configurar o app → Anúncios</p><h2>Anúncios</h2></div>
+  </header>
+  <div class="fb"><div class="row"><span class="fld">Resposta</span><p class="ans"><b>Sim, meu app contém anúncios</b>. Banner na tela inicial e vídeo premiado opcional, só no plano grátis.</p></div></div>
+</section>
+<section class="form" id="classificacao">
+  <header class="fh">
+    <label class="done"><input type="checkbox" id="ok-classificacao" data-step="classificacao"><span>Feito</span></label>
+    <div><p class="where">Painel → Configurar o app → Classificação de conteúdo</p><h2>Classificação de conteúdo</h2></div>
+  </header>
+  <div class="fb"><div class="row"><span class="fld">E-mail</span><pre class="val mono" id="c10">contato@bosyn.com.br</pre><button type="button" class="cp" data-target="c10">Copiar</button></div><div class="row"><span class="fld">Categoria</span><p class="ans"><b>Todos os outros tipos de app</b> (utilitário, produtividade, comunicação ou outro). Confira o nome no print.</p></div><div class="tbl"><table><thead><tr><th>Pergunta</th><th>Resposta</th></tr></thead><tbody><tr><th scope="row">Violência, sangue ou imagens violentas</th><td>Não</td></tr><tr><th scope="row">Medo</th><td>Não</td></tr><tr><th scope="row">Sexualidade, insinuação ou jogos de namoro</th><td>Não</td></tr><tr><th scope="row">Jogos de azar</th><td>Não</td></tr><tr><th scope="row">Idioma (palavrões)</th><td>Não</td></tr><tr><th scope="row">Substâncias controladas</th><td>Não</td></tr><tr><th scope="row">Humor ofensivo</th><td>Não</td></tr><tr><th scope="row">Compras digitais, recompensas em dinheiro ou NFTs</th><td><b>Sim</b>: assinatura PRO no app. O vídeo premiado não conta como compra.</td></tr><tr><th scope="row">Interação entre usuários (chat, voz, imagens)</th><td>Não</td></tr><tr><th scope="row">Compartilha a localização precisa</th><td>Não</td></tr><tr><th scope="row">Suásticas, propaganda nazista</th><td>Não</td></tr><tr><th scope="row">Denegrir a República da Coreia</th><td>Não</td></tr><tr><th scope="row">Atos terroristas</th><td>Não</td></tr><tr><th scope="row">Crimes realistas</th><td>Não</td></tr></tbody></table></div><p class="note">Clique em <b>Salvar</b>, confira o <b>Resumo</b> e clique em <b>Enviar</b>.</p></div>
+</section>
+<section class="form" id="publico">
+  <header class="fh">
+    <label class="done"><input type="checkbox" id="ok-publico" data-step="publico"><span>Feito</span></label>
+    <div><p class="where">Painel → Configurar o app → Público-alvo e conteúdo</p><h2>Público-alvo</h2></div>
+  </header>
+  <div class="fb"><div class="row"><span class="fld">Faixas</span><p class="ans">Marque só <b>Maiores de 18 anos</b>. Faixas abaixo de 13 ativam a política para Famílias.</p></div><div class="row"><span class="fld">Atrai crianças?</span><p class="ans">Responda com a verdade: o app não é feito para crianças e o visual é sóbrio. Anote a resposta no PROGRESSO.md.</p></div></div>
+</section>
+<section class="form" id="seguranca">
+  <header class="fh">
+    <label class="done"><input type="checkbox" id="ok-seguranca" data-step="seguranca"><span>Feito</span></label>
+    <div><p class="where">Painel → Configurar o app → Segurança dos dados</p><h2>Segurança dos dados</h2></div>
+  </header>
+  <div class="fb"><ol class="steps"><li>Visão geral: <b>Próxima</b>.</li><li>"O app coleta ou compartilha dados do usuário?" <b>Sim</b>. "Criptografados em trânsito?" <b>Sim</b>.</li><li>Contas: <b>o app permite criar conta</b>, com <b>e-mail e senha</b>. Login com conta de fora do app: <b>Não</b>.</li><li>"Os usuários podem pedir a exclusão dos dados?" <b>Sim</b>.</li><li>Marque os 8 tipos da tabela e responda <b>Iniciar</b> em cada um. Processamento efêmero: <b>Não</b> em todos.</li></ol><div class="tbl"><table><thead><tr><th>Tipo de dado</th><th>Coleta</th><th>Compartilha</th><th>Finalidades</th><th>Obrigatório?</th></tr></thead><tbody><tr><th scope="row">Informações pessoais → Endereço de e-mail</th><td>Coletado</td><td>Não</td><td>Gerenciamento da conta</td><td>Obrigatório</td></tr><tr><th scope="row">Informações pessoais → IDs do usuário</th><td>Coletado</td><td>Não</td><td>Gerenciamento da conta, funcionalidade do app</td><td>Obrigatório</td></tr><tr><th scope="row">Saúde e condicionamento físico → Informações de saúde</th><td>Coletado</td><td>Não</td><td>Funcionalidade do app</td><td>Obrigatório</td></tr><tr><th scope="row">Informações financeiras → Histórico de compras</th><td>Coletado</td><td>Não</td><td>Funcionalidade do app</td><td>Opcional (só quem assina)</td></tr><tr><th scope="row">Atividade no app → Interações com o app</th><td>Coletado</td><td>Sim</td><td>Funcionalidade, análise, publicidade, prevenção de fraudes</td><td>Obrigatório</td></tr><tr><th scope="row">Local → Local aproximado</th><td>Coletado</td><td>Sim</td><td>Publicidade, análise, prevenção de fraudes</td><td>Obrigatório</td></tr><tr><th scope="row">Identificadores do dispositivo → ID do dispositivo ou outros IDs</th><td>Coletado</td><td>Sim</td><td>Publicidade, análise, prevenção de fraudes</td><td>Obrigatório</td></tr><tr><th scope="row">Informações e desempenho do app → Registros de falhas e Diagnóstico</th><td>Coletado</td><td>Sim</td><td>Análise, prevenção de fraudes</td><td>Obrigatório</td></tr></tbody></table></div><div class="row"><span class="fld">URL de exclusão da conta</span><pre class="val mono" id="c11">https://alexfigueiras.github.io/exclusao-de-conta-bosyn.html</pre><button type="button" class="cp" data-target="c11">Copiar</button></div><p class="note">Os tipos compartilhados vêm do SDK do AdMob, que só é ligado no plano grátis. O Supabase atua em nome da BOSYN e não conta como compartilhamento.</p></div>
+</section>
+<section class="form" id="saude">
+  <header class="fh">
+    <label class="done"><input type="checkbox" id="ok-saude" data-step="saude"><span>Feito</span></label>
+    <div><p class="where">Painel → Conteúdo do app → Apps de saúde</p><h2>Declaração de apps de saúde</h2></div>
+  </header>
+  <div class="fb"><div class="row"><span class="fld">Categorias</span><p class="ans">Marque a categoria que descreve treino auditivo (saúde auditiva ou reabilitação, como estiver na lista do print). É grupo médico: exige conta de organização, e a da BOSYN é.</p></div><div class="row"><span class="fld">Dispositivo médico</span><p class="ans">Se perguntar: o BOSYN <b>não</b> é um dispositivo médico regulado. Confirme com o especialista regulatório antes da produção.</p></div></div>
+</section>
+<section class="form" id="adid">
+  <header class="fh">
+    <label class="done"><input type="checkbox" id="ok-adid" data-step="adid"><span>Feito</span></label>
+    <div><p class="where">Painel → Conteúdo do app → ID de publicidade</p><h2>ID de publicidade</h2></div>
+  </header>
+  <div class="fb"><div class="row"><span class="fld">Resposta</span><p class="ans"><b>Sim</b>. Finalidades: <b>Publicidade ou marketing</b>, <b>Análise</b> e <b>Prevenção de fraudes, segurança e conformidade</b>. O SDK do AdMob declara a permissão AD_ID.</p></div></div>
+</section>
+<section class="form" id="outros">
+  <header class="fh">
+    <label class="done"><input type="checkbox" id="ok-outros" data-step="outros"><span>Feito</span></label>
+    <div><p class="where">Painel → Conteúdo do app</p><h2>Recursos financeiros e apps governamentais</h2></div>
+  </header>
+  <div class="fb"><div class="row"><span class="fld">Recursos financeiros</span><p class="ans"><b>Meu app não oferece recursos financeiros</b> → Avançar → Salvar.</p></div><div class="row"><span class="fld">Apps governamentais</span><p class="ans"><b>Não</b>.</p></div><div class="row"><span class="fld">Outra declaração</span><p class="ans">Notícias, recursos de IA etc.: responda com a verdade a partir do print. No BOSYN, quase sempre <b>Não</b>.</p></div></div>
+</section>
+<section class="form" id="loja-config">
+  <header class="fh">
+    <label class="done"><input type="checkbox" id="ok-loja-config" data-step="loja-config"><span>Feito</span></label>
+    <div><p class="where">Aumentar número de usuários → Presença na loja → Configurações da loja</p><h2>Configurações da loja</h2></div>
+  </header>
+  <div class="fb"><div class="row"><span class="fld">App ou jogo</span><p class="ans"><b>App</b></p></div><div class="row"><span class="fld">Categoria</span><p class="ans"><b>Medicina</b> (siga o formulário de apps de saúde se ele indicar outra).</p></div><div class="row"><span class="fld">Tags</span><p class="ans">Até 5 entre as que a Play oferecer para saúde.</p></div><div class="row"><span class="fld">E-mail</span><pre class="val mono" id="c12">contato@bosyn.com.br</pre><button type="button" class="cp" data-target="c12">Copiar</button></div><div class="row"><span class="fld">Site (é onde o AdMob lê o app-ads.txt)</span><pre class="val mono" id="c13">https://alexfigueiras.github.io</pre><button type="button" class="cp" data-target="c13">Copiar</button></div><div class="row"><span class="fld">Marketing externo</span><p class="ans">Deixe <b>marcado</b>.</p></div></div>
+</section>
+<section class="form" id="pagina">
+  <header class="fh">
+    <label class="done"><input type="checkbox" id="ok-pagina" data-step="pagina"><span>Feito</span></label>
+    <div><p class="where">Presença na loja → Páginas de detalhes do app</p><h2>Página da loja</h2></div>
+  </header>
+  <div class="fb"><div class="row"><span class="fld">Nome do app (22/30)</span><pre class="val" id="c14">BOSYN: Treino Auditivo</pre><button type="button" class="cp" data-target="c14">Copiar</button></div><div class="row"><span class="fld">Descrição breve (78/80)</span><pre class="val" id="c15">Treino auditivo com fones: palavras parecidas e fala no barulho, no seu ritmo.</pre><button type="button" class="cp" data-target="c15">Copiar</button></div><div class="row"><span class="fld">Descrição completa (2426/4000)</span><pre class="val big" id="c16">O BOSYN é um programa de treino auditivo para quem quer entender melhor a fala, principalmente em lugares com barulho. Você treina com fones de ouvido, alguns minutos por dia, e o app se ajusta ao seu jeito de ouvir.
+
+COMO FUNCIONA
+Primeiro, um teste de audição de uns 10 minutos, feito com o seu fone, mostra quais sons ficam mais difíceis para você. Depois, os treinos dão mais atenção a esses sons. A dificuldade sobe e desce sozinha: fica sempre na medida para você continuar aprendendo, sem desanimar.
+
+OS TREINOS
+- Palavras parecidas: ouça uma palavra e escolha entre duas parecidas, como &quot;sala&quot; e &quot;fala&quot;. Grátis.
+- Conversa no barulho: entenda palavras com ruído de fundo, como num restaurante.
+- Voz de um lado, barulho do outro: entenda a voz que vem de um lado com barulho do outro, como numa mesa cheia.
+Depois de cada resposta, o app mostra se você acertou e deixa ouvir as duas palavras de novo.
+
+SEU PROGRESSO
+Uma meta de 15 minutos por dia, dias seguidos de treino e o nível de cada treino. A cada 14 dias, um teste rápido de números no barulho mostra se você está entendendo melhor a fala. É uma medida interna do app, não um exame clínico.
+
+PLANO PRO OU VÍDEO
+O treino &quot;Palavras parecidas&quot; é grátis. Os treinos com barulho fazem parte do plano PRO, por assinatura mensal ou anual pelo Google Play, que também tira os anúncios. Cancele quando quiser no Google Play. Quem não assina pode liberar uma sessão desses treinos assistindo a um vídeo curto, algumas vezes por dia. No plano grátis aparece um anúncio pequeno na tela inicial, nunca durante um teste ou um treino.
+
+FEITO PARA LER E OUVIR COM CONFORTO
+Letras grandes, bom contraste, botões grandes e compatível com o leitor de tela. Tudo em português.
+
+SEUS DADOS
+Os resultados dos seus testes e treinos ficam na sua conta, protegidos, e nunca são usados para anúncios. Você pode excluir a conta e todos os dados pelo próprio app.
+
+IMPORTANTE
+O BOSYN não é um dispositivo médico e não diagnostica, trata, cura nem previne doenças. O teste de audição do app é uma estimativa feita com o seu fone, usada só para ajustar o treino, e não substitui a avaliação de um fonoaudiólogo ou de um médico otorrinolaringologista. Use fones de ouvido e um volume confortável. Se você notar perda auditiva súbita, zumbido persistente, dor ou tontura, procure um profissional.
+
+Coloque os fones e comece pelo teste de audição. Uns minutos por dia já fazem parte do treino.</pre><button type="button" class="cp" data-target="c16">Copiar</button></div><div class="row"><span class="fld">Imagens</span><p class="ans">Ícone: <code>docs/play-store/loja/icone-512.png</code> · Recurso gráfico: <code>recurso-grafico-1024x500.png</code> · Capturas: 4 a 6 tiradas no celular pelo teste interno (lista em docs/play-store/ficha-da-loja.md).</p></div><div class="row"><span class="fld">Recursos de IA</span><p class="ans">Em <b>Declaração de recursos de IA</b>, escolha rotular como criados ou editados com IA: o ícone, o recurso gráfico e os textos foram feitos com ajuda de IA.</p></div></div>
+</section>
+<section class="form" id="assinatura">
+  <header class="fh">
+    <label class="done"><input type="checkbox" id="ok-assinatura" data-step="assinatura"><span>Feito</span></label>
+    <div><p class="where">Monetizar com o Google Play → Produtos → Assinaturas</p><h2>Assinaturas do plano PRO</h2></div>
+  </header>
+  <div class="fb"><p class="note">A Play só deixa criar assinatura depois que um AAB com a permissão de compra foi enviado (teste interno serve).</p><div class="tbl"><table><thead><tr><th>ID do produto</th><th>Nome</th><th>Plano base</th><th>Período</th></tr></thead><tbody><tr><td><code>bosyn_pro_mensal</code></td><td>BOSYN PRO mensal</td><td><code>mensal</code></td><td>1 mês</td></tr><tr><td><code>bosyn_pro_anual</code></td><td>BOSYN PRO anual</td><td><code>anual</code></td><td>1 ano</td></tr></tbody></table></div><div class="row"><span class="fld">ID do produto mensal</span><pre class="val mono" id="c17">bosyn_pro_mensal</pre><button type="button" class="cp" data-target="c17">Copiar</button></div><div class="row"><span class="fld">ID do produto anual</span><pre class="val mono" id="c18">bosyn_pro_anual</pre><button type="button" class="cp" data-target="c18">Copiar</button></div><div class="row"><span class="fld">Planos base</span><p class="ans">Renovação automática, preço definido por você, e <b>Ativar</b>. Sem oferta de teste grátis por enquanto.</p></div><div class="row"><span class="fld">Teste de licença</span><p class="ans">Configurações → Teste de licença: os Gmails da equipe. Compras deles não são cobradas.</p></div><div class="row"><span class="fld">Conta de serviço</span><p class="ans">Usuários e permissões → Convidar: o e-mail da conta de serviço, no app BOSYN, com <b>Ver informações financeiras</b> e <b>Gerenciar pedidos e assinaturas</b>.</p></div><div class="row"><span class="fld">Tópico das notificações em tempo real (troque &lt;projeto&gt;)</span><pre class="val mono" id="c19">projects/&lt;projeto&gt;/topics/play-rtdn</pre><button type="button" class="cp" data-target="c19">Copiar</button></div></div>
+</section>
+<section class="form" id="versao">
+  <header class="fh">
+    <label class="done"><input type="checkbox" id="ok-versao" data-step="versao"><span>Feito</span></label>
+    <div><p class="where">Testar e lançar → Teste interno ou Produção → Criar nova versão</p><h2>Versão e envio</h2></div>
+  </header>
+  <div class="fb"><div class="row"><span class="fld">Notas da versão</span><pre class="val" id="c20">&lt;pt-BR&gt;
+Primeira versão do BOSYN! Treino auditivo com fones: palavras parecidas e fala no barulho, no seu ritmo.
+&lt;/pt-BR&gt;</pre><button type="button" class="cp" data-target="c20">Copiar</button></div><div class="row"><span class="fld">Qual AAB</span><p class="ans">Teste interno: o pacote <code>…-anuncios-TESTE</code>. Produção: o <code>…-anuncios-REAIS</code>, deixando na lista só a versão anotada no PROGRESSO.md.</p></div><div class="row"><span class="fld">Assinatura de apps</span><p class="ans">Se pedir, aceite a assinatura de apps do Google Play: o Google guarda a chave final e a sua vira a chave de upload.</p></div><div class="row"><span class="fld">Países</span><p class="ans">Produção → Países/regiões: marque os países onde o app será vendido.</p></div><div class="row"><span class="fld">Antes de enviar</span><p class="ans">Abra a política e a página de exclusão numa janela anônima. Depois: <b>Visão geral da publicação → Enviar para revisão</b>.</p></div></div>
+</section>
+  </main>
+</div>
+<script>
+(function () {
+  var MEMORIA = "bosyn-folha-v1";
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(MEMORIA) || "{}") || {}; } catch (e) { saved = {}; }
+  var boxes = Array.prototype.slice.call(document.querySelectorAll("input[data-step]"));
+  function paint() {
+    var done = 0;
+    boxes.forEach(function (b) {
+      var id = b.getAttribute("data-step");
+      var card = document.getElementById(id);
+      var link = document.querySelector('nav a[href="#' + id + '"]');
+      if (card) card.classList.toggle("is-done", b.checked);
+      if (link) link.classList.toggle("is-done", b.checked);
+      if (b.checked) done++;
+    });
+    document.getElementById("count").textContent = done + " de " + boxes.length + " feitos";
+    document.getElementById("bar").style.width = (boxes.length ? (100 * done / boxes.length) : 0) + "%";
+  }
+  boxes.forEach(function (b) {
+    b.checked = !!saved[b.getAttribute("data-step")];
+    b.addEventListener("change", function () {
+      saved[b.getAttribute("data-step")] = b.checked;
+      try { localStorage.setItem(MEMORIA, JSON.stringify(saved)); } catch (e) {}
+      paint();
+    });
+  });
+  paint();
+  function selectText(el) {
+    var r = document.createRange(); r.selectNodeContents(el);
+    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  }
+  document.addEventListener("click", function (ev) {
+    var btn = ev.target.closest(".cp");
+    if (!btn) return;
+    var el = document.getElementById(btn.getAttribute("data-target"));
+    var text = el.innerText;
+    function ok() { btn.textContent = "Copiado ✓"; btn.classList.add("ok"); setTimeout(function () { btn.textContent = "Copiar"; btn.classList.remove("ok"); }, 1600); }
+    function fallback() {
+      selectText(el);
+      try { if (document.execCommand("copy")) { ok(); return; } } catch (e) {}
+      btn.textContent = "Selecionado: Ctrl+C";
+    }
+    if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(ok, fallback); } else { fallback(); }
+  });
+})();
+</script>

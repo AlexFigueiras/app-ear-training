@@ -1,142 +1,107 @@
-import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
-import 'phoneme_map.dart';
 
-/// Controlador Central de Gamificação Clínica [ORQUESTRADOR]
-/// Gerencia XP, Energia Neural e Nível de Acuidade de forma reativa.
+import '../training/progress_rules.dart';
+
+/// Estado da gamificação (Etapa 10 do plano). As regras ficam em `ProgressRules` (Dart puro).
+///
+/// - **Pontos de treino:** por esforço, iguais em todos os treinos, com bônus por recorde e pela
+///   meta do dia. Ficam salvos em `total_xp` (nome antigo, mantido para não perder o histórico).
+/// - **Nível:** por treino, do limiar da escada adaptativa (`training_state`), nunca do XP.
+/// - **Minutos de hoje, dias seguidos e dias da semana:** calculados do histórico de sessões pela
+///   Home ([setDailyProgress]), não incrementados aqui. A sequência antiga subia a cada abertura
+///   da Home.
+///
+/// Saíram: "Energia Neural" (Etapa 6), "nível de acuidade" por XP, SNR do Coquetel aqui dentro e
+/// contagem de sessões por dia. Dados antigos com essas chaves são lidos e ignorados.
 class GamificationController extends ChangeNotifier {
   static final GamificationController _instance = GamificationController._internal();
   factory GamificationController() => _instance;
 
   GamificationController._internal();
 
-  int _totalXP = 0;
-  int _neuralEnergy = 5;
-  int _currentStreak = 0;
-  int _sessionsCompletedToday = 0;
-  String _acuityLevel = "INITIAL";
+  int _points = 0;
+  double _minutesToday = 0;
+  int _streakDays = 0;
+  int _goalDaysThisWeek = 0;
 
-  // NÍVEL 4: Ambiente Hostil [EFEITO COQUETEL]
-  double _currentSNR = 20.0;
-  double _maxNoiseThreshold = 0.0;
+  // Estado das escadas por treino ("phonemic", "cocktail", "spatial"): valor, limiar e recorde.
+  final Map<String, Map<String, dynamic>> _trainingState = {};
 
-  // Getters
-  int get totalXP => _totalXP;
-  int get neuralEnergy => _neuralEnergy;
-  int get currentStreak => _currentStreak;
-  int get sessionsCompletedToday => _sessionsCompletedToday;
-  String get acuityLevel => _acuityLevel;
-  bool get hasEnergy => _neuralEnergy > 0;
-  // Recomendação suave (sem bloco duro): ≥2 sessões/dia = mínimo efetivo
-  bool get recommendRest => _sessionsCompletedToday >= 2;
-  double get currentSNR => _currentSNR;
-  double get maxNoiseThreshold => _maxNoiseThreshold;
+  int get trainingPoints => _points;
+  double get minutesToday => _minutesToday;
+  int get streakDays => _streakDays;
+  int get goalDaysThisWeek => _goalDaysThisWeek;
+  bool get dailyGoalMet => _minutesToday >= ProgressRules.dailyGoalMinutes;
 
-  /// Seleção Inteligente baseada no Audiograma [Fase 1]
-  Map<String, dynamic>? getSmartPhoneme(List<dynamic> audiogramData) {
-    final List<Map<String, dynamic>> level2Stimuli = List<Map<String, dynamic>>.from(PHONEME_REHAB_DATA['level_2']);
-    
-    // Filtra frequências com perda > 25dB
-    final criticalFreqs = audiogramData.where((p) => (p['threshold'] as num) > 25).map((p) => p['frequency'] as int).toList();
-    
-    if (criticalFreqs.isEmpty) return level2Stimuli[math.Random().nextInt(level2Stimuli.length)];
+  Map<String, dynamic>? trainingState(String module) => _trainingState[module];
 
-    // Filtra fonemas na faixa de +/- 1500Hz das frequências críticas
-    final smartMatch = level2Stimuli.where((s) {
-      final band = s['freq_band'] as int;
-      return criticalFreqs.any((f) => (band - f).abs() <= 1500);
-    }).toList();
-
-    if (smartMatch.isEmpty) return level2Stimuli[math.Random().nextInt(level2Stimuli.length)];
-    return smartMatch[math.Random().nextInt(smartMatch.length)];
+  void saveTrainingState(String module, Map<String, dynamic> state) {
+    _trainingState[module] = {..._trainingState[module] ?? const {}, ...state};
+    notifyListeners();
   }
 
-  /// Adiciona XP baseado na performance e tipo de fonema [ANALYTICS]
-  void addAcuityXP(double successRate, List<String> phonemes) {
-    double baseXP = 100 * successRate;
-    bool hasHighFrequencyPhonemes = phonemes.any((p) =>
-      ['s', 'f', 't', 'ç', 'x', 'ch', 'spatial', 'z', 'fricative', 'sibilant'].contains(p.toLowerCase())
+  int? levelOf(TrainingId t) => ProgressRules.currentLevel(t, _trainingState[t.module]);
+
+  /// Progresso do dia, calculado do histórico pela Home.
+  void setDailyProgress({required double minutesToday, required int streakDays, required int goalDaysThisWeek}) {
+    _minutesToday = minutesToday;
+    _streakDays = streakDays;
+    _goalDaysThisWeek = goalDaysThisWeek;
+    notifyListeners();
+  }
+
+  /// Fecha uma sessão: soma minutos de hoje, verifica recorde ([threshold], menor = melhor) e
+  /// soma os pontos. [module] null = medida (dígitos no ruído), sem recorde de treino.
+  SessionReward completeSession({String? module, double? threshold, required Duration duration}) {
+    final before = _minutesToday;
+    _minutesToday += duration.inSeconds / 60;
+    final goalJustReached =
+        before < ProgressRules.dailyGoalMinutes && _minutesToday >= ProgressRules.dailyGoalMinutes;
+
+    var newBest = false;
+    if (module != null) {
+      final best = (_trainingState[module]?['best'] as num?)?.toDouble();
+      newBest = ProgressRules.isNewBest(best, threshold);
+      if (newBest) _trainingState[module] = {..._trainingState[module] ?? const {}, 'best': threshold};
+    }
+
+    final reward = SessionReward(
+      points: ProgressRules.sessionPoints(duration: duration, newBest: newBest, goalJustReached: goalJustReached),
+      newBest: newBest,
+      goalJustReached: goalJustReached,
     );
+    _points += reward.points;
+    notifyListeners();
+    return reward;
+  }
 
-    double multiplier = hasHighFrequencyPhonemes ? 2.0 : 1.0;
-    _totalXP += (baseXP * multiplier).toInt();
-
-    // Nível 4: acerto sustentado acima de 80% → aumenta dificuldade (SNR menor)
-    if (successRate >= 0.8 && phonemes.contains('cocktail')) {
-      _currentSNR = (_currentSNR - 2.0).clamp(-10.0, 20.0);
-      if (_currentSNR < _maxNoiseThreshold) _maxNoiseThreshold = _currentSNR;
-    }
-
-    _updateAcuityLevel();
+  /// Zera o estado em memória (logout / exclusão de conta): o próximo usuário do aparelho
+  /// não pode herdar pontos, níveis ou recordes do anterior.
+  void resetForNewUser() {
+    _points = 0;
+    _minutesToday = 0;
+    _streakDays = 0;
+    _goalDaysThisWeek = 0;
+    _trainingState.clear();
     notifyListeners();
   }
 
-  void resetSNR() {
-    _currentSNR = 20.0;
-    notifyListeners();
-  }
-
-  void consumeEnergy() {
-    if (_neuralEnergy > 0) {
-      _neuralEnergy--;
-      notifyListeners();
-    }
-  }
-
-  /// Reinicia energia para nova sessão. Chamar no initState de cada tela de treino.
-  void resetEnergyForNewSession() {
-    _neuralEnergy = 5;
-    notifyListeners();
-  }
-
-  void resetEnergy() {
-    _neuralEnergy = 5;
-    notifyListeners();
-  }
-
-  void incrementSessionsToday() {
-    _sessionsCompletedToday++;
-    notifyListeners();
-  }
-
-  void setSessionsCompletedToday(int count) {
-    _sessionsCompletedToday = count;
-    notifyListeners();
-  }
-
-  void updateStreak(int days) {
-    _currentStreak = days;
-    notifyListeners();
-  }
-
-  void _updateAcuityLevel() {
-    if (_totalXP > 5000) {
-      _acuityLevel = "ADVANCED";
-    } else if (_totalXP > 1000) {
-      _acuityLevel = "MODERATE";
-    } else {
-      _acuityLevel = "INITIAL";
-    }
-  }
-
-  /// Sincronização com Supabase [PERSISTÊNCIA]
-  Map<String, dynamic> toMapForSupabase() {
-    return {
-      'total_xp': _totalXP,
-      'neural_energy': _neuralEnergy,
-      'current_streak': _currentStreak,
-      'acuity_level': _acuityLevel,
-      'max_noise_threshold': _maxNoiseThreshold,
-      'last_training_at': DateTime.now().toIso8601String(),
-    };
-  }
+  /// Sincronização com Supabase (`profiles.gamification_data`).
+  Map<String, dynamic> toMapForSupabase() => {
+        'total_xp': _points,
+        // Cópia: quem recebe o mapa não pode ser afetado por um reset posterior.
+        'training_state': {for (final e in _trainingState.entries) e.key: Map<String, dynamic>.of(e.value)},
+        'last_training_at': DateTime.now().toIso8601String(),
+      };
 
   void fromMap(Map<String, dynamic> map) {
-    _totalXP = (map['total_xp'] as num?)?.toInt() ?? 0;
-    _neuralEnergy = (map['neural_energy'] as num?)?.toInt() ?? 5;
-    _currentStreak = (map['current_streak'] as num?)?.toInt() ?? 0;
-    _acuityLevel = map['acuity_level'] as String? ?? "INITIAL";
-    _maxNoiseThreshold = (map['max_noise_threshold'] as num?)?.toDouble() ?? 0.0;
+    _points = (map['total_xp'] as num?)?.toInt() ?? 0;
+    _trainingState
+      ..clear()
+      ..addAll({
+        for (final e in ((map['training_state'] as Map?) ?? const {}).entries)
+          if (e.value is Map) e.key as String: Map<String, dynamic>.from(e.value as Map),
+      });
     notifyListeners();
   }
 }

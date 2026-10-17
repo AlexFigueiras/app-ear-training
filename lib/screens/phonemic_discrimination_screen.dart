@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -6,8 +5,18 @@ import '../audio_engine/audio_engine.dart';
 import '../core/gamification_controller.dart';
 import '../models/audiogram.dart';
 import '../models/rehab_session.dart';
+import '../services/audio_service_manager.dart';
 import '../services/supabase_service.dart';
+import '../training/adaptive_staircase.dart';
+import '../training/item_selector.dart';
+import '../training/progress_rules.dart';
+import 'hearing_test/hearing_test_flow.dart';
+import 'session_summary_screen.dart';
+import 'widgets/phonemic_widgets.dart';
+import 'widgets/training_app_bar.dart';
+import 'widgets/trial_feedback.dart';
 
+/// Treino "Palavras parecidas" (discriminação de pares mínimos).
 class PhonemicDiscriminationScreen extends StatefulWidget {
   final Audiogram audiogram;
   const PhonemicDiscriminationScreen({super.key, required this.audiogram});
@@ -17,299 +26,281 @@ class PhonemicDiscriminationScreen extends StatefulWidget {
 }
 
 class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScreen> {
+  late Audiogram _audiogram;
+  late ItemSelector _selector;
   final AudioRehabEngine _engine = AudioRehabEngine();
   final SupabaseService _supabase = SupabaseService();
   final GamificationController _gamification = GamificationController();
 
-  int _currentTrial = 0;
-  // Protocolo de dose: 25 trials/sessão (evidência: Sweetow & Sabes 2006)
-  static const int _maxTrials = 25;
+  static const _module = 'phonemic';
+  int _currentTrial = 0; // tentativas respondidas
   int _correctAnswers = 0;
-  DateTime _sessionStart = DateTime.now();
+  // Sessão de ~10 min (a dose é em minutos acumulados, não em número de tentativas).
+  final SessionClock _clock = SessionClock();
+  bool _finished = false;
 
-  // Seleção atual a partir de PHONEME_REHAB_DATA (inclui freq_band)
-  Map<String, dynamic>? _currentPhoneme;
-  List<String> _options = [];
+  Trial? _trial;
+  Trial? _upcoming; // próxima tentativa, já baixada enquanto a pessoa responde a atual
   bool _canRespond = false;
+  bool _isPlaying = false;
+  TrialFeedback? _feedback; // retorno da última resposta (achado D3)
+  String? _nowPlaying; // o que toca durante "Ouvir as duas"
 
-  // Staircase 2-down/1-up: constrói dificuldade progressiva sem frustrar
-  int _consecutiveCorrect = 0;
-  double _extraBoostDb = 6.0; // Começa facilitado; reduz com acertos
+  // Dificuldade: reforço extra só nas bandas agudas (>= 3 kHz); menos reforço = mais difícil.
+  // Escada 3-acertos/1-erro (~79% de acerto), retomada de onde a pessoa parou.
+  late final AdaptiveStaircase _boost = AdaptiveStaircase.resume(
+      _gamification.trainingState(_module), start: 12, minValue: 0, maxValue: 24);
+  double get _extraBoostDb => _boost.value;
 
   final List<Map<String, dynamic>> _sessionLog = [];
 
   @override
   void initState() {
     super.initState();
-    _engine.initializeEngine(widget.audiogram);
-    _gamification.resetEnergyForNewSession();
+    _audiogram = widget.audiogram;
+    _selector = ItemSelector(audiogram: _audiogram);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
+  }
+
+  /// Audiograma do teste antigo? Oferece refazer antes de treinar (o EQ e a escolha das
+  /// palavras usam o audiograma).
+  Future<void> _bootstrap() async {
+    _audiogram = await HearingTestFlow.ensureCurrent(context, _audiogram);
+    if (!mounted) return;
+    _selector = ItemSelector(audiogram: _audiogram);
+    await _engine.initializeEngine(_audiogram);
+    if (_selector.nothingAudible && mounted) await showInaudibleHighFrequencyWarning(context);
     _startTrial();
   }
 
-  // Constrói audiogramData para seleção inteligente de fonemas
-  List<Map<String, dynamic>> get _audiogramData => [
-    ...widget.audiogram.leftEar.map((p) => {'frequency': p.frequency, 'threshold': p.threshold}),
-    ...widget.audiogram.rightEar.map((p) => {'frequency': p.frequency, 'threshold': p.threshold}),
-  ];
-
   void _startTrial() {
-    if (_currentTrial >= _maxTrials) {
+    if (_clock.isOver) {
       _finishSession();
       return;
     }
-
-    // Seleciona fonema priorizando a zona de perda do paciente
-    _currentPhoneme = _gamification.getSmartPhoneme(_audiogramData);
-    _options = [_currentPhoneme!['target'] as String, _currentPhoneme!['distractor'] as String]..shuffle();
-
+    _trial = _upcoming ?? _selector.next();
+    _upcoming = _selector.next();
+    _engine.prefetchSpeech(_upcoming!.played, voice: _upcoming!.voice);
     setState(() => _canRespond = false);
     _playTarget();
   }
 
+  /// Toca a palavra e só libera a resposta quando ela termina.
   Future<void> _playTarget() async {
-    if (_currentPhoneme == null) return;
-    await _engine.playPhonemicStimulus(
-      text: _currentPhoneme!['target'] as String,
-      freqBand: (_currentPhoneme!['freq_band'] as num).toDouble(),
-      extraBoostDb: _extraBoostDb,
-    );
-    setState(() => _canRespond = true);
+    final trial = _trial;
+    if (trial == null || _isPlaying) return;
+    setState(() {
+      _isPlaying = true;
+      _canRespond = false;
+    });
+    try {
+      final duration = await _engine.playPhonemicStimulus(
+        text: trial.played,
+        voice: trial.voice,
+        freqBand: trial.pair.contrast.cueBandHz.toDouble(),
+        extraBoostDb: _extraBoostDb,
+      );
+      await Future.delayed(duration);
+      if (!mounted) return;
+      setState(() {
+        _isPlaying = false;
+        _canRespond = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isPlaying = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Não foi possível tocar a palavra. Verifique a internet e toque em Repetir.")));
+    }
+  }
+
+  @override
+  void dispose() {
+    AudioServiceManager().silenceAll();
+    super.dispose();
   }
 
   void _handleResponse(String selected) {
-    if (!_canRespond || _currentPhoneme == null) return;
+    final trial = _trial;
+    if (!_canRespond || trial == null) return;
 
-    final isCorrect = selected == _currentPhoneme!['target'];
+    final isCorrect = trial.isCorrect(selected);
+    final presentedBoost = _extraBoostDb;
+    _selector.record(trial, correct: isCorrect);
 
-    // Staircase 2-down/1-up
-    if (isCorrect) {
-      _correctAnswers++;
-      _consecutiveCorrect++;
-      if (_consecutiveCorrect >= 2) {
-        _consecutiveCorrect = 0;
-        _extraBoostDb = (_extraBoostDb - 3.0).clamp(0.0, 18.0); // Mais difícil
-      }
-      HapticFeedback.lightImpact();
-    } else {
-      _consecutiveCorrect = 0;
-      _extraBoostDb = (_extraBoostDb + 3.0).clamp(0.0, 18.0); // Mais fácil
-      _gamification.consumeEnergy();
-      HapticFeedback.heavyImpact();
-    }
+    _boost.record(correct: isCorrect);
+    if (isCorrect) _correctAnswers++;
+    isCorrect ? HapticFeedback.lightImpact() : HapticFeedback.heavyImpact();
 
     _sessionLog.add({
       'trial': _currentTrial + 1,
-      'target': _currentPhoneme!['target'],
-      'distractor': _currentPhoneme!['distractor'],
-      'freq_band': _currentPhoneme!['freq_band'],
-      'type': _currentPhoneme!['type'],
+      'pair': trial.pair.id,
+      'contrast': trial.pair.contrast.name,
+      'cue_band_hz': trial.pair.contrast.cueBandHz,
+      'played': trial.played,
+      'voice': trial.voice,
       'selected': selected,
       'correct': isCorrect,
-      'boost_db': _extraBoostDb,
+      'boost_db': presentedBoost,
     });
+    _currentTrial++;
 
-    setState(() => _currentTrial++);
+    setState(() {
+      _canRespond = false;
+      _feedback = TrialFeedback(correct: isCorrect, correctAnswer: trial.played, selected: selected);
+    });
+    // Acerto: avança sozinho. Erro: espera "Continuar", para dar tempo de comparar.
+    if (isCorrect) {
+      Future.delayed(const Duration(milliseconds: 1100), () {
+        if (mounted && _feedback != null) _advance();
+      });
+    }
+  }
+
+  void _advance() {
+    setState(() {
+      _feedback = null;
+      _nowPlaying = null;
+    });
     _startTrial();
   }
 
+  /// Feedback contrastivo: toca a certa e depois a que a pessoa marcou, na mesma voz.
+  Future<void> _listenBoth() async {
+    final trial = _trial;
+    final feedback = _feedback;
+    if (trial == null || feedback == null || _isPlaying) return;
+    setState(() => _isPlaying = true);
+    try {
+      for (final (label, word) in [('Certa', trial.played), ('Marcada', feedback.selected)]) {
+        if (!mounted) return;
+        setState(() => _nowPlaying = '$label: "$word"');
+        final duration = await _engine.playPhonemicStimulus(
+          text: word,
+          voice: trial.voice,
+          freqBand: trial.pair.contrast.cueBandHz.toDouble(),
+          extraBoostDb: _extraBoostDb,
+        );
+        await Future.delayed(duration + const Duration(milliseconds: 500));
+      }
+    } catch (_) {
+      // Sem rede: o retorno visual continua valendo.
+    }
+    if (mounted) setState(() => _isPlaying = false);
+  }
+
   void _finishSession() async {
-    final duration = DateTime.now().difference(_sessionStart).inMilliseconds;
+    if (_finished) return; // tempo esgotado e "Terminar" ao mesmo tempo
+    _finished = true;
+    final duration = _clock.elapsed.inMilliseconds;
+    _gamification.saveTrainingState(_module, _boost.toJson());
     final session = RehabSession(
-      patientId: widget.audiogram.patientId,
+      patientId: _audiogram.patientId,
       date: DateTime.now(),
       level: RehabLevel.phonemicDiscrimination,
-      totalTrials: _maxTrials,
+      totalTrials: _currentTrial,
       correctAnswers: _correctAnswers,
-      averageResponseTimeMs: duration / _maxTrials,
+      averageResponseTimeMs: _currentTrial == 0 ? 0 : duration / _currentTrial,
       metadata: {
         'log': _sessionLog,
         'final_boost_db': _extraBoostDb,
-        'critical_phoneme_band': _currentPhoneme?['freq_band'],
+        'boost_threshold_db': _boost.threshold,
+        'staircase': '3-down-1-up',
+        'stimulus_bank_version': 2,
+        'duration_ms': duration,
       },
     );
 
-    // Atualiza gamificação com desempenho da sessão
-    final phonemeTypes = _sessionLog
-        .map((e) => e['type'] as String? ?? '')
-        .where((t) => t.isNotEmpty)
-        .toList();
-    _gamification.addAcuityXP(session.accuracy / 100.0, phonemeTypes);
-    _gamification.incrementSessionsToday();
+    final reward = _gamification.completeSession(
+      module: _module,
+      threshold: _boost.threshold ?? _boost.value,
+      duration: Duration(milliseconds: duration),
+    );
 
     try {
       await _supabase.saveRehabSession(session);
-      // Persiste estado de gamificação para carregar na próxima sessão
       final user = Supabase.instance.client.auth.currentUser;
       if (user != null) {
         await _supabase.saveGamificationData(_gamification.toMapForSupabase());
       }
-      if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro ao salvar sessão: $e")));
-        if (mounted) Navigator.pop(context);
       }
     }
+    if (!mounted) return;
+    final level = ProgressRules.phonemicLevel(_boost.threshold ?? _extraBoostDb);
+    SessionSummaryScreen.replaceCurrent(
+      context,
+      SessionSummary(
+            training: 'Palavras parecidas',
+            correct: _correctAnswers,
+            total: _currentTrial,
+            duration: Duration(milliseconds: duration),
+            levelLine: 'Nível de dificuldade alcançado: $level de 7',
+            reward: reward,
+            minutesToday: _gamification.minutesToday,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final options = _trial?.options ?? const <String>[];
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D0F),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        title: const Text("NÍVEL 2: DISCRIMINAÇÃO FONÊMICA"),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Center(
-              child: Text(
-                "BOOST: ${_extraBoostDb.toStringAsFixed(0)} dB",
-                style: TextStyle(
-                  color: _extraBoostDb > 9 ? Colors.orange : Colors.greenAccent,
-                  fontSize: 10,
-                  fontFamily: 'monospace',
+      appBar: TrainingAppBar(
+        title: 'Palavras parecidas',
+        canFinish: _currentTrial > 0 && !_isPlaying,
+        onFinish: _finishSession,
+        progress: _clock.progress,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Center(
+          child: Column(
+            children: [
+              Text(
+                "Palavra ${_currentTrial + (_feedback == null ? 1 : 0)} · faltam cerca de ${_clock.minutesLeft} min",
+                style: const TextStyle(color: Colors.white70, fontSize: 16),
+              ),
+              const SizedBox(height: 24),
+              const PulseIcon(),
+              const SizedBox(height: 40),
+              const Text(
+                "Qual palavra você ouviu?",
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Colors.white),
+              ),
+              const SizedBox(height: 48),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 400),
+                child: Wrap(
+                  key: ValueKey(_currentTrial),
+                  alignment: WrapAlignment.center,
+                  spacing: 24,
+                  runSpacing: 16,
+                  children: [
+                    for (final opt in options)
+                      AnimatedOptionCard(label: opt, onTap: () => _handleResponse(opt), highlight: feedbackHighlight(_feedback, opt)),
+                  ],
                 ),
               ),
-            ),
-          ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(4),
-          child: LinearProgressIndicator(
-            value: _currentTrial / _maxTrials,
-            backgroundColor: Colors.white10,
-            valueColor: const AlwaysStoppedAnimation<Color>(Colors.greenAccent),
-          ),
-        ),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              "Trial ${_currentTrial + 1} / $_maxTrials",
-              style: const TextStyle(color: Colors.white38, fontSize: 12, fontFamily: 'monospace'),
-            ),
-            const SizedBox(height: 24),
-            const _PulseIcon(),
-            const SizedBox(height: 48),
-            const Text(
-              "Qual palavra você ouviu?",
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Colors.white70),
-            ),
-            const SizedBox(height: 64),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 400),
-              child: Row(
-                key: ValueKey(_currentTrial),
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: _options.map((opt) => Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: _AnimatedOptionCard(label: opt, onTap: () => _handleResponse(opt)),
-                )).toList(),
+              const SizedBox(height: 24),
+              if (_feedback != null)
+                FeedbackBanner(
+                  feedback: _feedback!,
+                  nowPlaying: _nowPlaying,
+                  onListenBoth: _feedback!.correct ? null : _listenBoth,
+                  onContinue: _feedback!.correct || _isPlaying ? null : _advance,
+                ),
+              const SizedBox(height: 24),
+              TextButton.icon(
+                onPressed: _isPlaying ? null : _playTarget,
+                icon: const Icon(Icons.refresh, size: 28),
+                label: const Text("Ouvir de novo", style: TextStyle(fontSize: 18)),
+                style: TextButton.styleFrom(foregroundColor: Colors.white70, minimumSize: const Size(48, 48)),
               ),
-            ),
-            const SizedBox(height: 80),
-            IconButton(
-              icon: const Icon(Icons.refresh, color: Colors.grey, size: 32),
-              onPressed: _canRespond ? null : _playTarget,
-              tooltip: "Repetir estímulo",
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PulseIcon extends StatefulWidget {
-  const _PulseIcon();
-
-  @override
-  State<_PulseIcon> createState() => _PulseIconState();
-}
-
-class _PulseIconState extends State<_PulseIcon> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _pulse;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
-    _pulse = Tween<double>(begin: 1.0, end: 1.15).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ScaleTransition(
-      scale: _pulse,
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: Colors.blueAccent.withOpacity(0.05),
-          border: Border.all(color: Colors.blueAccent.withOpacity(0.1)),
-        ),
-        child: const Icon(Icons.hearing, size: 64, color: Colors.blueAccent),
-      ),
-    );
-  }
-}
-
-class _AnimatedOptionCard extends StatefulWidget {
-  final String label;
-  final VoidCallback onTap;
-  const _AnimatedOptionCard({required this.label, required this.onTap});
-
-  @override
-  State<_AnimatedOptionCard> createState() => _AnimatedOptionCardState();
-}
-
-class _AnimatedOptionCardState extends State<_AnimatedOptionCard> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scale;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 100));
-    _scale = Tween<double>(begin: 1.0, end: 0.95).animate(_controller);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => _controller.forward(),
-      onTapUp: (_) => _controller.reverse(),
-      onTap: widget.onTap,
-      child: ScaleTransition(
-        scale: _scale,
-        child: Container(
-          width: 150,
-          height: 120,
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E1E24),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white10),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            widget.label,
-            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
+            ],
           ),
         ),
       ),

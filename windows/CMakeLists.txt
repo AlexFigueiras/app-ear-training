@@ -55,12 +55,10 @@ add_subdirectory("runner")
 # Adiciona o Motor DSP Nativo
 add_library(dsp_audio_engine SHARED
     "../cpp/native_bridge.cpp"
-    "../cpp/dsp_engine.cpp"
-    "../cpp/fir_filter.cpp"
+    "../cpp/audio_graph.cpp"
 )
 target_compile_features(dsp_audio_engine PUBLIC cxx_std_17)
-# No Windows não usamos Oboe, então o dsp_engine terá o bypass do hardware ou mock
-# Para este teste, focaremos na lógica de processamento síncrono.
+# No Windows não há Oboe: o AudioGraph existe sem saída de áudio, só para a API FFI responder.
 target_compile_definitions(dsp_audio_engine PRIVATE "WINDOWS_EXPORT")
 
 # Generated plugin build rules, which manage building the plugins and adding

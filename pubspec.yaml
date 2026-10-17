@@ -1,30 +1,34 @@
 name: ear_training
-description: "Neural Plasticity-Based Auditory Rehabilitation App"
+description: "BOSYN — app de treino auditivo (não é dispositivo médico)"
 publish_to: 'none'
 version: 1.0.0+1
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
 
+# Configuração (SUPABASE_URL / SUPABASE_ANON_KEY) entra em tempo de build:
+#   flutter run --dart-define-from-file=.env
+# Não há mais .env empacotado como asset (ver lib/core/app_config.dart e docs/DECISIONS.md).
 dependencies:
   flutter:
+    sdk: flutter
+  # Textos do sistema (voltar, menus, leitor de tela) em pt-BR. Parte do SDK do Flutter;
+  # aprovado pelo usuário na Etapa 11 do plano "treino eficaz".
+  flutter_localizations:
     sdk: flutter
   cupertino_icons: ^1.0.6
   audio_session: ^0.1.18
   fl_chart: ^0.68.0
   get_it: ^7.7.0
   provider: ^6.1.2
-  supabase_flutter: ^2.8.0
-  flutter_dotenv: ^5.1.0
-  http: ^1.6.0
+  supabase_flutter: ^2.13.0
   path_provider: ^2.1.5
   crypto: ^3.0.7
-  pdf: ^3.12.0
-  printing: ^5.14.3
+  ffi: ^2.2.0
   introduction_screen: ^4.0.0
-  flutter_stripe: ^12.4.0
-  permission_handler: ^12.0.1
   device_info_plus: ^13.0.0
+  in_app_purchase: ^3.3.1
+  google_mobile_ads: ^9.1.0
 
 dev_dependencies:
   flutter_test:
@@ -34,5 +38,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - .env
-    - assets/audio/
+    # Fonte única: o mesmo arquivo é exibido no app e publicado na web (URL da Play Console).
+    - docs/legal/politica-de-privacidade.md

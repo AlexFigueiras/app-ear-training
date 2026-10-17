@@ -1,34 +1,50 @@
-# Plano Diretor de Desenvolvimento (PRD) - App de Reabilitação Auditiva
+# Plano Diretor de Desenvolvimento (PRD) — BOSYN, app de treino auditivo
 **Role Ativa:** [ORQUESTRADOR]
 
-## 1. Visão de Produto: Reabilitação Neural de Elite [MASTER_PLAN]
-Aplicativo mobile nativo focado em Reabilitação Auditiva Baseada em Plasticidade Neural, com estética **Industrial-Utilitária**. Foco em alta performance, latência zero e gamificação clínica sóbria (XP, Energia Neural e Streaks).
+## 1. Visão de produto [MASTER_PLAN]
+App mobile de **treino auditivo** para a percepção de consoantes agudas e da fala no ruído.
+**Não é dispositivo médico e não recupera a audição**: ensina a aproveitar melhor as pistas que
+ainda chegam ao ouvido.
 
-## 2. Caminho Crítico BOSYN (Golden Rules)
-1. Antes de qualquer código, validar o `docs/MASTER_PLAN.md`.
-2. Interface deve evocar autoridade clínica e cockpit industrial.
-3. Gerenciamento de memória de áudio (FFI) via `AudioServiceManager.forceStopAll()`.
+As regras de produto (treinos, gamificação, medida de progresso, acessibilidade) estão em
+`docs/MASTER_PLAN.md`; o porquê de cada uma, em `docs/DECISIONS.md` (plano "treino eficaz",
+Etapas 0–12).
 
+## 2. Caminho crítico BOSYN (Golden Rules)
+1. Antes de qualquer código, validar o `docs/MASTER_PLAN.md` e ler o `docs/STATUS.md`.
+2. **Evidência antes de efeito.** Toda mecânica de treino precisa de base na literatura (pista
+   audível, várias vozes, escada adaptativa ~79%, feedback, dose em minutos) e de teste
+   automatizado da regra. Toda promessa ao paciente precisa ser honesta: sem "restaurar",
+   "recuperar" ou "curar".
+3. **Áudio seguro:** silêncio ao sair de qualquer tela, ao ir para segundo plano e ao
+   desconectar o fone (`AudioServiceManager().silenceAll()` / `AudioLifecycleGuard`). Medição sem
+   processamento (bypass).
+4. **Acessibilidade sênior travada por máquina:** fonte ≥ 14, contraste AA, telas roláveis com
+   fonte em 200%, pt-BR (`verify_rules` + `test/large_font_test.dart`).
 
-## 3. Plano de Gamificação: Níveis de Processamento Auditivo
-Progressão terapêutica contínua guiando o cérebro do silêncio ao caos controlado:
-*   **Nível 1 (Isolamento Tonal):** Sons puros e sweep de frequências agudas calibradas exatamente na borda do limiar de detecção (Near-Threshold) do paciente. Gamificação baseada em acerto de detecção (Sim/Não).
-*   **Nível 2 (Discriminação Fonêmica no Silêncio):** Apresentação de pares mínimos difíceis para perda aguda (ex: /f/ vs /s/, /p/ vs /t/). O motor realça (boost) a frequência deficitária e reduz a amplitude de graves para evitar mascaramento ascendente.
-*   **Nível 3 (Áudio Espacial / Atenção Auditiva):** Introdução de estímulos lateralizados. O paciente precisa identificar a origem do som (Direita/Esquerda/Centro). Utiliza plugins de áudio binaural do Flutter/Motor Nativo.
-*   **Nível 4 (O Efeito Coquetel - Speech in Noise):** Introdução dinâmica de ruído de fundo (Babble Noise, White Noise, ruído de restaurante). A Relação Sinal-Ruído (SNR - Signal to Noise Ratio) é ajustada algoritmicamente: inicia com o sinal-alvo +15dB acima do ruído e reduz gradativamente até 0dB ou negativo, conforme a curva de aprendizagem e plasticidade do paciente.
+## 3. Os treinos (estado atual)
+- **Palavras parecidas:** pares mínimos reais por ponto de articulação (s×ch, s×f, t×p, t×k, /s/
+  final); qualquer palavra do par pode tocar; dificuldade = reforço só nos agudos.
+- **Conversa no barulho:** 4 opções (sala/fala/salas/falas) na frase "Diga ___ agora", com
+  ruído de fala ou burburinho de 6 vozes e SNR adaptativo exato.
+- **Voz de um lado, barulho do outro:** a mesma tarefa com a voz a ±60° e o burburinho do outro
+  lado (diferença de tempo entre orelhas + sombra da cabeça no motor nativo).
+- **Teste de audição:** triagem relativa (Hughson-Westlake modificado com tentativas
+  silenciosas, 250 Hz–8 kHz). É a âncora do EQ por orelha e da escolha de palavras.
+- **Audição na fala:** teste de dígitos no ruído a cada 14 dias. É a medida de progresso, com
+  material que o treino não usa.
 
-### Detalhamento Técnico: Nível 2 (Discriminação Fonêmica)
-*   **Lógica de Randomização:** O sistema executará o sorteio de pares mínimos difíceis (ex: pares f/s, p/t) de uma fonte estruturada. A cada rodada, o motor selecionará um áudio Alvo e organizará opções em tela cujo posicionamento será embaralhado clinicamente (via `List.shuffle()`) para evitar adaptação por viés de posição visual.
-*   **Filtros de Áudio em Tempo Real:** Conforme a Global Rule, o `AudioRehabEngine` orquestrará filtros clínicos (High-Pass/Equalizador), aplicando ganho (*boost*) estritamente nas frequências deficitárias identificadas pelo audiograma, reduzindo graves para evitar mascaramento ascendente. O normalizador de ganho atuará logo antes da saída para mitigar distorções e preservar a integridade coclear do paciente.
-*   **Telemetria e Supabase (SSOT):** Os Acertos, Erros e Tempos de Reação serão consolidados. Ao concluir o nível ou sob *checkpoint*, o agregador fará a persistência no Supabase em tabela designada (ex: `rehab_sessions`). A inserção é submetida rigorosamente sob a política RLS passando o `user_id` atrelado ao Auth token, garantindo que o prontuário seja impenetrável transversalmente (LGPD/HIPAA).
+A Fonêmica é grátis; os treinos com ruído fazem parte do plano PRO (ainda não à venda).
 
-## 4. Stack Técnica & Conectores Antigravity
-*   **Frontend:** Flutter/Dart (Mobile Nativo - iOS/Android).
-    *   *Libs Base:* `audio_session` (gerência de foco de áudio OS), `just_audio` / `soloud` ou FFI direto para DSP.
-    *   *UX/UI:* Skill `[frontend-design]`, alta legibilidade, contraste AAA, touch-targets grandes, acessibilidade sênior.
-*   **Backend & DSP (Digital Signal Processing):** Conectores de alta performance da Antigravity, orquestrando Cloud Functions / Edge Functions. O áudio do paciente pode ser processado localmente no device (usando FFI - C++/Rust hookado no Flutter) para processamento em tempo real (Latência < 20ms) sem ida ao servidor, garantindo segurança e fluidez.
-*   **Banco de Dados/Auth:** Supabase (PostgreSQL). JWT associado ao Auth com políticas rígidas de tenant.
-*   **Monetização:** Skill `[stripe-integration]` nativa para in-app purchases ou SaaS account (assinaturas recorrentes mensais/anuais).
+## 4. Stack técnica
+- **Frontend:** Flutter/Dart (Android; iOS fora de escopo por ora). Regras de domínio em Dart puro
+  (`lib/training/`), com testes.
+- **Áudio:** motor nativo C++/Oboe via FFI (`cpp/`): mixer `AudioGraph`, EQ de biquads por
+  orelha, espacializador, limitador. Testado no host com sanitizers no CI.
+- **Backend:** Supabase (Auth + Postgres com RLS por `user_id`). Edge Functions para o que exige
+  segredo (`tts`, `delete-account`).
+- **Monetização:** PRO "em breve"; venda só com Google Play Billing validado no servidor (ver
+  `docs/PLAY_STORE.md`).
 
 ## 5. Gestão de Skills e Bibliotecas Externas
 De acordo com as diretrizes globais do projeto:
@@ -36,23 +52,23 @@ De acordo com as diretrizes globais do projeto:
 *   Os arquivos de implementação de skills estão localizados em `skills-library/archives/` para otimização de contexto. O agente deve ignorar recursivamente qualquer conteúdo dentro desta pasta.
 *   **Atenção:** Não tentar ler ou indexar nada dentro de `archives/` por conta própria. A implementação específica será solicitada pelo usuário com o caminho exato do arquivo, caso seja necessária a sua utilização.
 
-## 6. Avisos Legais e Termos Médicos
-> **Aviso de Suporte à Decisão Clínica:** Este aplicativo fornece sugestão de suporte à decisão e treinamento auditivo baseado em algoritmos. Não substitui o diagnóstico, acompanhamento ou adaptação de próteses auditivas realizadas por um fonoaudiólogo/médico otorrinolaringologista. O julgamento final e a responsabilidade clínica são do profissional responsável que acompanha o paciente.
+## 6. Aviso de saúde
+> O BOSYN é um programa de treino auditivo. Não é um dispositivo médico, não faz diagnóstico e não
+> substitui a avaliação de um fonoaudiólogo ou médico otorrinolaringologista. O teste auditivo do
+> app é uma estimativa feita com o seu fone, usada só para personalizar o treino.
+
+O texto exibido no app fica em `lib/core/legal_documents.dart`. O antigo "aviso de suporte à
+decisão clínica" saiu: contradizia o posicionamento de não ser dispositivo médico (ANVISA RDC
+657/2022, ver `docs/PLAY_STORE.md`).
 
 ---
-**Status Atual:** 
-- [x] Norte Estratégico estabelecido: `docs/MASTER_PLAN.md`.
-- [x] Camada de Persistência Atualizada (SQL user_profiles/rehab_progress).
-- [x] GamificationController (Energia/XP Phônemas) implementado.
-- [x] AudioServiceManager (Ciclo de Vida/forceStopAll) implementado.
-- [x] Ambiente Flutter configurado.
-- [x] Motor de Áudio Nativo robustecido.
+**Status atual:** ver `docs/STATUS.md` (seção "Plano treino eficaz").
 
-**Próximos Passos:** 
-1. **Refatoração UI:** Aplicar os novos Design Tokens Industriais na `HomeScreen`.
-2. **Fluxo de Energia:** Bloquear UI ao atingir 0 de Energia Neural no `GamificationController`.
-3. **Integração Supabase Profile:** Sincronizar dados de XP/Streak no login via `SupabaseService`.
-4. **Skill 5 Analytics:** Vincular acertos de fonemas agudos ao XP 2x e progressão de nível.
+**Próximos passos:**
+1. Teste no celular das Etapas 2–11 (fone com fio; TalkBack).
+2. Revisão por fonoaudiólogo do banco de palavras e dos textos de orientação.
+3. Etapa 13 (opcional): rebaixamento de frequência, só com validação profissional.
+4. Ações humanas: deploy da Edge Function `tts`, rotação de chaves, migration 003.
 
 
 5. Gestão Proativa de Skills

@@ -1,279 +1,283 @@
-import 'dart:math' as math;
-import 'dart:typed_data';
-import 'dart:io';
 import 'dart:ffi' as ffi;
+import 'dart:io';
+import 'dart:math' as math;
+
 import 'package:ffi/ffi.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter/foundation.dart';
+
 import '../models/audiogram.dart';
 import '../services/tts_service.dart';
-import 'package:flutter/foundation.dart';
+import '../training/stimulus_bank.dart';
+import 'audibility_profile.dart';
+import 'masker_bank.dart';
 import 'native_engine.dart';
+import 'signal_level.dart';
+import 'tone_factory.dart';
+import 'wav_decoder.dart';
 
-/// Motor de Áudio Central para Reabilitação Auditiva
+/// Motor de áudio do treino: prepara cada estímulo em Dart (decodifica, normaliza) e entrega ao
+/// motor nativo (`cpp/audio_graph.*`), que aplica o EQ por orelha e mixa com o ruído.
 class AudioRehabEngine {
   static final AudioRehabEngine _instance = AudioRehabEngine._internal();
   factory AudioRehabEngine() => _instance;
-  bool _isInitialized = false;
-  String? _securePatientId;
-  Audiogram? _currentAudiogram;
+  AudioRehabEngine._internal();
 
   final _nativeBridge = NativeDSPBridge();
-  late final GoogleTTSService _tts;
+  final GoogleTTSService _tts = GoogleTTSService();
+  bool _isInitialized = false;
+  AudibilityProfile _profile = AudibilityProfile.flat;
 
-  // Calibração: 0dB HL -> 0.0001 linear. 80dB HL -> 1.0 linear.
+  // Escala relativa dos tons do teste: 0 dB = -80 dBFS; 80 dB = escala cheia (teto).
   static const double _kRefDb = 80.0;
-  static const double _fs = 48000.0; // Sample Rate padrão do Engine
+  static const double _fs = 48000.0;
 
-  AudioRehabEngine._internal() {
-    final apiKey = dotenv.env['GOOGLE_TTS_API_KEY'] ?? '';
-    _tts = GoogleTTSService(apiKey);
-  }
-
-  Future<void> restartHardwareAudio() async {
-    _nativeBridge.stopHardwareAudio();
-    await Future.delayed(const Duration(milliseconds: 200));
-    _nativeBridge.startHardwareAudio();
-    debugPrint("[ENGINE_REINIT] Hardware Audio Stream Restarted (EXCLUSIVE MODE ACTIVE)");
-  }
-
-  Future<void> initializeEngine(Audiogram audiogram) async {
-    _securePatientId = audiogram.patientId;
-    _currentAudiogram = audiogram;
-    _nativeBridge.startHardwareAudio();
-    _isInitialized = true;
-
-    // Configura DSP nativo com perfil audiométrico do paciente
-    // Passa frequências e Half-Gain para cada ponto do audiograma (média L+R)
-    _applyAudiogramProfileToDsp(audiogram);
-
-    print("AudioRehabEngine Inicializado (Native Stereo DSP | Adaptive Clinical EQ)");
-  }
-
-  void _applyAudiogramProfileToDsp(Audiogram audiogram) {
-    final combined = <int, double>{};
-    for (final p in audiogram.leftEar) {
-      combined[p.frequency] = (combined[p.frequency] ?? 0) + p.threshold;
-    }
-    for (final p in audiogram.rightEar) {
-      combined[p.frequency] = (combined[p.frequency] ?? 0) + p.threshold;
-    }
-
-    // Calcula Half-Gain para cada frequência (média L+R / 2)
-    final freqList = combined.keys.toList()..sort();
-    if (freqList.isEmpty) return;
-
-    final freqPtr = calloc<ffi.Float>(freqList.length);
-    final gainPtr = calloc<ffi.Float>(freqList.length);
-    for (int i = 0; i < freqList.length; i++) {
-      final freq = freqList[i];
-      final countEars = (audiogram.leftEar.any((p) => p.frequency == freq) ? 1 : 0) +
-                        (audiogram.rightEar.any((p) => p.frequency == freq) ? 1 : 0);
-      final avgThreshold = combined[freq]! / countEars;
-      freqPtr[i] = freq.toDouble();
-      gainPtr[i] = (avgThreshold / 2.0).clamp(0.0, 30.0); // Half-Gain, max 30 dB
-    }
-
-    _nativeBridge.setAudiogramProfile(freqPtr, gainPtr, freqList.length);
-    calloc.free(freqPtr);
-    calloc.free(gainPtr);
-  }
+  bool get isInitialized => _isInitialized;
+  NativeDSPBridge get native => _nativeBridge;
+  AudibilityProfile get profile => _profile;
 
   double getNativeLatencyMs() => _nativeBridge.getLatencyMs();
   int getLastStimulusTimestampNs() => _nativeBridge.getStimulusTimestampNs();
   int getNativeCurrentTimestampNs() => _nativeBridge.getCurrentTimestampNs();
-  
-  NativeDSPBridge get native => _nativeBridge; 
 
-  /// Regra de Meio Ganho (Half-Gain) [AUDIOLOGIA]
-  /// Gain = Loss / 2
-  double getCompensatoryGain(double frequencyHz) {
-    if (_currentAudiogram == null) return 0.0;
-    
-    // Busca a perda média para a frequência alvo (L+R)
-    final leftPoint = _currentAudiogram!.leftEar.firstWhere(
-      (p) => p.frequency >= frequencyHz, orElse: () => _currentAudiogram!.leftEar.last
-    );
-    final rightPoint = _currentAudiogram!.rightEar.firstWhere(
-      (p) => p.frequency >= frequencyHz, orElse: () => _currentAudiogram!.rightEar.last
-    );
-    
-    double avgLoss = (leftPoint.threshold + rightPoint.threshold) / 2.0;
-    return avgLoss / 2.0; // REGRA DE OURO
+  Future<void> initializeEngine(Audiogram audiogram) async {
+    _nativeBridge.startHardwareAudio();
+    _isInitialized = true;
+    _profile = AudibilityProfile.fromAudiogram(audiogram);
+    _applyEq(_profile);
+    debugPrint("AudioRehabEngine: EQ por orelha esq=${_profile.left} dir=${_profile.right}");
   }
 
-  /// NÍVEL 2: Discriminação Fonêmica com EQ Dinâmico
-  Future<void> playPhonemicStimulus({
+  void _applyEq(AudibilityProfile profile) =>
+      _nativeBridge.setEqTargets(profile.left, profile.right);
+
+  /// Sintetiza (ou lê do cache), decodifica a 48 kHz e normaliza o RMS da palavra.
+  /// Se a voz pedida falhar (ex.: indisponível no Google), usa a voz padrão.
+  Future<Float32List> _loadSpeech(String text, {String? voice}) async {
+    String path;
+    try {
+      path = voice == null ? await _tts.synthesize(text) : await _tts.synthesize(text, voiceName: voice);
+    } catch (e) {
+      if (voice == null) rethrow;
+      debugPrint("TTS: voz $voice falhou ($e); usando a padrão.");
+      path = await _tts.synthesize(text);
+    }
+    final bytes = await File(path).readAsBytes();
+    return SignalLevel.normalizeRms(WavDecoder.decodeToRate(bytes).samples);
+  }
+
+  /// Baixa e guarda no cache a palavra da próxima tentativa enquanto a pessoa responde a atual.
+  Future<void> prefetchSpeech(String text, {String? voice}) async {
+    try {
+      await _loadSpeech(text, voice: voice);
+    } catch (_) {
+      // Sem rede agora: a tentativa tenta de novo na hora de tocar.
+    }
+  }
+
+  Duration _durationOf(Float32List samples) =>
+      Duration(microseconds: samples.length * 1000000 ~/ _fs);
+
+  /// Prepara o caminho do alvo: EQ do paciente (+ boost agudo), sem bypass e pan. Com [snrDb],
+  /// ajusta o ganho do ruído de fundo (que precisa ter sido iniciado com [startMasker]); sem
+  /// ele, o ruído fica mudo.
+  /// [azimuthDeg]/[maskerAzimuthDeg]: direção da palavra e do ruído (null = sem direção).
+  void _prepareSpeech({
+    double boostDb = 0.0,
+    double panning = 0.0,
+    double? snrDb,
+    double? azimuthDeg,
+    double? maskerAzimuthDeg,
+  }) {
+    _applyEq(_profile.withHighBandBoost(boostDb));
+    _nativeBridge.setDspBypass(false);
+    _nativeBridge.setTargetPanning(panning);
+    _nativeBridge.setTargetAzimuth(azimuthDeg);
+    _nativeBridge.setMaskerAzimuth(maskerAzimuthDeg);
+    _nativeBridge.setMaskerGain(snrDb == null ? 0.0 : SignalLevel.maskerGainForSnr(snrDb));
+  }
+
+  /// Inicia o ruído de fundo em loop (mudo até o primeiro [playCocktailStimulus]). O burburinho
+  /// usa 6 frases do TTS; sem rede, cai para o ruído com espectro de fala. Devolve o tipo usado.
+  Future<MaskerType> startMasker(MaskerType type) async {
+    _verifySecurityScope();
+    var used = type;
+    Float32List samples;
+    if (type == MaskerType.babble) {
+      try {
+        samples = MaskerBank.babble([
+          for (var i = 0; i < MaskerBank.babbleSentences.length; i++)
+            await _loadSpeech(MaskerBank.babbleSentences[i], voice: StimulusBank.voices[i % StimulusBank.voices.length]),
+        ]);
+      } catch (e) {
+        debugPrint("Burburinho indisponível ($e); usando ruído de fala.");
+        used = MaskerType.speechShaped;
+        samples = MaskerBank.speechShapedNoise();
+      }
+    } else {
+      samples = MaskerBank.speechShapedNoise();
+    }
+    _nativeBridge.setMaskerGain(0.0);
+    final pointer = calloc<ffi.Float>(samples.length);
+    try {
+      pointer.asTypedList(samples.length).setAll(0, samples);
+      _nativeBridge.setNoiseSample(pointer, samples.length, 1.0, true);
+    } finally {
+      calloc.free(pointer);
+    }
+    return used;
+  }
+
+  /// Fonêmica. [extraBoostDb] é a dificuldade: ganho extra só nas bandas agudas (>= 3 kHz).
+  /// Devolve a duração: a tela só libera a resposta depois que a palavra termina.
+  Future<Duration> playPhonemicStimulus({
     required String text,
+    String? voice,
     required double freqBand,
     double extraBoostDb = 0.0,
   }) async {
     _verifySecurityScope();
-
-    // 1. Calcula Ganho Clínico (Half-Gain Rule + boost adaptativo)
-    double clinicalGainDb = getCompensatoryGain(freqBand) + extraBoostDb;
-    // Converte dB para linear e aplica ao volume do sample (clamp a +12 dB = 4x)
-    double gainLinear = math.pow(10, clinicalGainDb / 20).toDouble().clamp(1.0, 4.0);
-
-    // 2. Síntese de Fala
-    final path = await _tts.synthesize(text);
-    final bytes = await File(path).readAsBytes();
-    Float32List samples = _convertInt16ToFloat32(bytes);
-
-    // 3. Carrega e executa no Native DSP com ganho clínico real
-    _loadSampleToNative(samples, isTarget: true, volume: gainLinear);
-
-    print("ESTÍMULO N2: '$text' | Freq: $freqBand Hz | Gain EQ: +${clinicalGainDb.toStringAsFixed(1)} dB (${gainLinear.toStringAsFixed(2)}x)");
+    final samples = await _loadSpeech(text, voice: voice);
+    _prepareSpeech(boostDb: extraBoostDb);
+    _loadSampleToNative(samples);
+    debugPrint("ESTÍMULO N2: '$text' | banda $freqBand Hz | boost agudo +${extraBoostDb.toStringAsFixed(1)} dB");
+    return _durationOf(samples);
   }
 
-  /// NÍVEL 3: Atenção Espacial (Panning Binaural)
-  Future<void> playSpatialStimulus({
+  /// Fala no ruído. Fala e ruído têm o mesmo RMS e o ruído entra depois do EQ: o SNR pedido é o
+  /// entregue, inclusive abaixo de 0 dB. O ruído precisa ter sido iniciado com [startMasker].
+  Future<Duration> playCocktailStimulus({
     required String text,
-    required double panning, // -1.0 a 1.0
+    String? voice,
+    required double snrDb,
+    double? azimuthDeg,
+    double? maskerAzimuthDeg,
     double freqBand = 4000.0,
   }) async {
     _verifySecurityScope();
-
-    // 1. Configura Panning Nativo
-    _nativeBridge.setTargetPanning(panning);
-
-    // 2. Aplica EQ de Meio Ganho
-    double gainDb = getCompensatoryGain(freqBand);
-    double gainLinear = math.pow(10, gainDb / 20).toDouble().clamp(1.0, 4.0);
-
-    final path = await _tts.synthesize(text);
-    final bytes = await File(path).readAsBytes();
-    Float32List samples = _convertInt16ToFloat32(bytes);
-
-    // 3. Carrega no Mixer com ganho clínico real
-    _loadSampleToNative(samples, isTarget: true, volume: gainLinear);
-
-    print("ESTÍMULO ESPACIAL: '$text' | Pan: $panning | EQ: +${gainDb.toStringAsFixed(1)} dB (${gainLinear.toStringAsFixed(2)}x)");
+    final samples = await _loadSpeech(text, voice: voice);
+    _prepareSpeech(snrDb: snrDb, azimuthDeg: azimuthDeg, maskerAzimuthDeg: maskerAzimuthDeg);
+    _loadSampleToNative(samples);
+    debugPrint("COQUETEL: SNR=$snrDb dB");
+    return _durationOf(samples);
   }
 
+  /// Voz do teste de dígitos: diferente das vozes do treino, para a medida não "treinar junto".
+  static const String dinVoice = 'pt-BR-Wavenet-D';
+  static const List<String> _digitWords = [
+    'zero', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove',
+  ];
+  final Map<int, Float32List> _digitCache = {};
 
+  /// Baixa os 10 dígitos antes de o teste começar (para não haver pausa entre trios).
+  Future<void> prepareDigits() async {
+    for (var d = 0; d <= 9; d++) {
+      _digitCache[d] ??= await _loadSpeech(_digitWords[d], voice: dinVoice);
+    }
+  }
 
-  /// CALIBRAÇÃO: Tom senoidal puro para ajuste de hardware
-  Future<void> playCalibrationTone({
+  /// Teste de dígitos no ruído: 3 dígitos com 300 ms entre eles, SEM EQ (a medida não pode
+  /// mudar quando o audiograma muda), sobre o ruído de fala iniciado com [startMasker].
+  Future<Duration> playDigitTriplet(List<int> digits, double snrDb) async {
+    _verifySecurityScope();
+    await prepareDigits();
+    final gap = Float32List((0.3 * _fs).round());
+    final parts = <Float32List>[for (final d in digits) ...[_digitCache[d]!, gap]]..removeLast();
+    final triplet = Float32List(parts.fold(0, (n, p) => n + p.length));
+    var offset = 0;
+    for (final p in parts) {
+      triplet.setAll(offset, p);
+      offset += p.length;
+    }
+    _nativeBridge.setDspBypass(true);
+    _nativeBridge.setTargetPanning(0.0);
+    _nativeBridge.setTargetAzimuth(null);
+    _nativeBridge.setMaskerAzimuth(null);
+    _nativeBridge.setMaskerGain(SignalLevel.maskerGainForSnr(snrDb));
+    _loadSampleToNative(triplet);
+    return _durationOf(triplet);
+  }
+
+  /// Painel de QA (só debug/profile): a mesma palavra com e sem o EQ do paciente.
+  Future<Duration> playQaWord(String text, {required bool withEq}) async {
+    if (!_isInitialized) _nativeBridge.startHardwareAudio();
+    final samples = await _loadSpeech(text);
+    _prepareSpeech();
+    _nativeBridge.setDspBypass(!withEq);
+    _loadSampleToNative(samples);
+    return _durationOf(samples);
+  }
+
+  /// Tom de calibração: 1 kHz a -20 dBFS, centralizado, sem EQ, com rampas.
+  Future<Duration> playCalibrationTone({
     double frequencyHz = 1000.0,
     double durationSeconds = 1.0,
   }) async {
-    // 1. Garante que o hardware esteja ativo (mesmo sem audiograma inicial)
     if (!_isInitialized) _nativeBridge.startHardwareAudio();
-
-    // 2. Gera Senoide
-    final int numSamples = (durationSeconds * _fs).toInt();
-    final Float32List samples = Float32List(numSamples);
-    for (int i = 0; i < numSamples; i++) {
-      samples[i] = math.sin(2 * math.pi * frequencyHz * i / _fs);
-    }
-
-    // 3. Carrega no motor nativo
-    _loadSampleToNative(samples, isTarget: true);
-    
-    print("CALIBRAÇÃO: Tom de $frequencyHz Hz emitido por $durationSeconds segundos.");
+    _prepareTone(panning: 0.0);
+    _loadSampleToNative(ToneFactory.sine(
+      frequencyHz: frequencyHz,
+      seconds: durationSeconds,
+      amplitude: ToneFactory.calibrationAmplitude,
+      sampleRate: _fs,
+    ));
+    return Duration(microseconds: (durationSeconds * 1e6).round());
   }
 
-  /// NÍVEL 4: O Efeito Coquetel - SNR Balanceado [AMBIENTE HOSTIL]
-  Future<void> playCocktailStimulus({
-    required String text,
-    required double snrDb,
-    required String noiseEnvironment,
-    double freqBand = 4000.0,
-  }) async {
-    _verifySecurityScope();
-
-    // 1. Configura Intensidade do Ruído (relação SNR → linear)
-    double noiseIntensity = math.pow(10, (-snrDb) / 20).toDouble();
-    _nativeBridge.setNoiseIntensity(noiseIntensity.clamp(0.0, 1.0));
-
-    // 2. Aplica EQ Clínico no Alvo + ganho real aplicado ao volume do sample
-    double clinicalGainDb = getCompensatoryGain(freqBand);
-    double gainLinear = math.pow(10, clinicalGainDb / 20).toDouble().clamp(1.0, 4.0);
-
-    // 3. Síntese
-    final path = await _tts.synthesize(text);
-    final bytes = await File(path).readAsBytes();
-    Float32List samples = _convertInt16ToFloat32(bytes);
-
-    // 4. Carrega no motor nativo com ganho clínico real
-    _loadSampleToNative(samples, isTarget: true, volume: gainLinear);
-
-    print("MISTURA COQUETEL: ENV=$noiseEnvironment | SNR=$snrDb dB | EQ: +${clinicalGainDb.toStringAsFixed(1)} dB");
-  }
-
-  void _loadSampleToNative(Float32List samples, {bool isTarget = true, double volume = 1.0}) {
-    final pointer = calloc<ffi.Float>(samples.length);
-    for (int i = 0; i < samples.length; i++) {
-      pointer[i] = samples[i];
-    }
-
-    if (isTarget) {
-      _nativeBridge.setTargetSample(pointer, samples.length, volume, false);
-    } else {
-      _nativeBridge.setNoiseSample(pointer, samples.length, 1.0, true);
-    }
-    calloc.free(pointer);
-  }
-
-  Float32List _convertInt16ToFloat32(Uint8List bytes) {
-    int offset = 0;
-    if (bytes.length > 44 && String.fromCharCodes(bytes.sublist(0, 4)) == "RIFF") {
-      offset = 44;
-    }
-    final int16List = bytes.buffer.asInt16List(offset);
-    final floatList = Float32List(int16List.length);
-    for (int i = 0; i < int16List.length; i++) {
-      floatList[i] = int16List[i] / 32768.0;
-    }
-    return floatList;
-  }
-
-  void stop() {
-    _nativeBridge.stopHardwareAudio();
-  }
-
-  /// NÍVEL 4: O Efeito Coquetel - SNR Balanceado (Alias legado)
-  Future<void> playSpeechInNoise({
-    required String targetText,
-    required double snrDb,
-  }) async {
-    return playCocktailStimulus(
-      text: targetText,
-      snrDb: snrDb,
-      noiseEnvironment: 'RESTAURANTE',
-    );
-  }
-
-  /// CALIBRAÇÃO: Tom senoidal puro para ajuste de hardware (Alias para ThresholdTest)
-  Future<void> playPureTone({
+  /// Tom puro do teste de limiar: SEM EQ (bypass) — medir através de processamento invalida o
+  /// audiograma. Nível com teto em [_kRefDb] (escala cheia).
+  /// [pulsed]: 3 bipes de 250 ms (teste de limiar); senão, tom contínuo de [durationMs].
+  Future<Duration> playPureTone({
     required int frequencyHz,
     required int durationMs,
     required EarSide ear,
     required double dbLevel,
+    bool pulsed = false,
   }) async {
     _verifySecurityScope();
+    final level = math.min(dbLevel, _kRefDb);
+    final amplitude = math.pow(10, (level - _kRefDb) / 20).toDouble();
+    final samples = pulsed
+        ? ToneFactory.pulsed(frequencyHz: frequencyHz.toDouble(), amplitude: amplitude, sampleRate: _fs)
+        : ToneFactory.sine(
+            frequencyHz: frequencyHz.toDouble(),
+            seconds: durationMs / 1000.0,
+            amplitude: amplitude,
+            sampleRate: _fs,
+          );
+    _prepareTone(panning: ear == EarSide.left ? -1.0 : (ear == EarSide.right ? 1.0 : 0.0));
+    _loadSampleToNative(samples);
+    debugPrint("PURE TONE: $frequencyHz Hz | $level dB | $ear");
+    return _durationOf(samples);
+  }
 
-    // 1. Gera Senoide
-    final int numSamples = (durationMs / 1000.0 * _fs).toInt();
-    final Float32List samples = Float32List(numSamples);
-    
-    // Nível Linear: 10^((dB HL - Ref) / 20)
-    double amplitude = math.pow(10, (dbLevel - _kRefDb) / 20).toDouble();
+  /// Duração de uma apresentação pulsada (para as tentativas silenciosas esperarem o mesmo tempo).
+  static Duration get pulsedToneDuration => Duration(
+      microseconds: ToneFactory.pulsed(frequencyHz: 1000, amplitude: 0).length * 1000000 ~/ 48000);
 
-    for (int i = 0; i < numSamples; i++) {
-      samples[i] = amplitude * math.sin(2 * math.pi * frequencyHz * i / _fs);
+  void _prepareTone({required double panning}) {
+    _nativeBridge.setDspBypass(true);
+    _nativeBridge.setTargetAzimuth(null);
+    _nativeBridge.setMaskerAzimuth(null);
+    _nativeBridge.setTargetPanning(panning);
+    _nativeBridge.setMaskerGain(0.0);
+  }
+
+  void _loadSampleToNative(Float32List samples) {
+    final pointer = calloc<ffi.Float>(samples.length);
+    try {
+      pointer.asTypedList(samples.length).setAll(0, samples);
+      _nativeBridge.setTargetSample(pointer, samples.length, 1.0);
+    } finally {
+      calloc.free(pointer);
     }
+  }
 
-    // 2. Configura Panning (L/R)
-    double targetPanning = 0.0;
-    if (ear == EarSide.left) targetPanning = -1.0;
-    if (ear == EarSide.right) targetPanning = 1.0;
-    _nativeBridge.setTargetPanning(targetPanning);
+  /// Silêncio imediato (alvo, ruído e tom), sem desligar o stream.
+  void silenceAll() => _nativeBridge.silenceAll();
 
-    // 3. Carrega no motor nativo
-    _loadSampleToNative(samples, isTarget: true);
-    
-    print("PURE TONE: $frequencyHz Hz | $dbLevel dB | Ear: $ear");
+  void stop() {
+    _nativeBridge.silenceAll();
+    _nativeBridge.stopHardwareAudio();
   }
 
   void _verifySecurityScope() {

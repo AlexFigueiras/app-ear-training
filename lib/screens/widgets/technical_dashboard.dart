@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import '../../services/event_buffer.dart';
 import '../../services/audio_service_manager.dart';
+import 'qa_audio_panel.dart';
 
 class TechnicalDashboard extends StatefulWidget {
   const TechnicalDashboard({super.key});
@@ -17,10 +18,9 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
   late Timer _ticker;
   double _dspLoad = 0.0;
   int _xRuns = 0;
-  bool _isSoftKneeActive = false;
-  double _softKneeOpacity = 0.0;
+  int _limiterHits = 0;
   List<String> _pendingFiles = [];
-  String _socModel = "Detecting...";
+  String _socModel = "Identificando…";
 
   @override
   void initState() {
@@ -31,18 +31,10 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
       final engine = AudioServiceManager().engine;
       final native = engine.native; // Acesso direto à ponte FFI
       
-      final hit = native.consumeSoftKneeFlag();
-      
       setState(() {
         _dspLoad = native.getDspLoad();
         _xRuns = native.getXRunCount();
-        if (hit) {
-          _isSoftKneeActive = true;
-          _softKneeOpacity = 1.0;
-        } else {
-          _softKneeOpacity = (_softKneeOpacity - 0.1).clamp(0.0, 1.0);
-          if (_softKneeOpacity == 0.0) _isSoftKneeActive = false;
-        }
+        _limiterHits = native.getLimiterHits();
       });
     });
   }
@@ -64,7 +56,7 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
       });
     } else {
       setState(() {
-        _socModel = "Desktop Environment";
+        _socModel = "Computador";
       });
     }
   }
@@ -83,14 +75,15 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
         color: Color(0xFF121212),
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("MODO ENGENHEIRO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 2)),
+              const Text("Painel técnico (só versão de teste)", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 2)),
               IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close, color: Colors.white54)),
             ],
           ),
@@ -100,12 +93,12 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
           // SoC Info Row
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: Colors.blueAccent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
             child: Row(
               children: [
                 const Icon(Icons.memory, color: Colors.blueAccent, size: 14),
                 const SizedBox(width: 8),
-                Text("SoC Hardware: $_socModel", style: const TextStyle(color: Colors.blueAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                Text("Aparelho: $_socModel", style: const TextStyle(color: Colors.blueAccent, fontSize: 14, fontWeight: FontWeight.bold)),
               ],
             ),
           ),
@@ -114,48 +107,32 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
           // Row 1: Hardware Metrics
           Row(
             children: [
-              _buildMetricCard("DSP LOAD", "${(_dspLoad * 100).toStringAsFixed(1)}%", _dspLoad > 0.8 ? Colors.redAccent : Colors.greenAccent),
+              _buildMetricCard("Carga do áudio", "${(_dspLoad * 100).toStringAsFixed(1)}%", _dspLoad > 0.8 ? Colors.redAccent : Colors.greenAccent),
               const SizedBox(width: 8),
-              _buildMetricCard("XRUNS", _xRuns.toString(), _xRuns > 0 ? Colors.orangeAccent : Colors.greenAccent),
+              _buildMetricCard("Falhas de áudio", _xRuns.toString(), _xRuns > 0 ? Colors.orangeAccent : Colors.greenAccent),
+              const SizedBox(width: 8),
+              // Acionamentos do limitador de segurança (-1 dBFS): numa sessão normal deve ficar 0.
+              _buildMetricCard("Limitador", _limiterHits.toString(), _limiterHits > 0 ? Colors.orangeAccent : Colors.greenAccent),
             ],
           ),
           const SizedBox(height: 16),
-          
-          // Row 2: Soft-Knee Visualizer (Diagnostics)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
-            child: Row(
-              children: [
-                AnimatedOpacity(
-                  duration: const Duration(milliseconds: 50),
-                  opacity: _softKneeOpacity,
-                  child: Container(
-                    width: 12, height: 12,
-                    decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.amber, blurRadius: 10)]),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Text("SOFT-KNEE LIMITER ACTIVE", style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
-              ],
-            ),
-          ),
+          const QaAudioPanel(),
           const SizedBox(height: 16),
           
           // Row 3: Persistence Sync
-          const Text("OFFLINE BACKLOG", style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
+          const Text("Dados ainda não enviados", style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Container(
             height: 100,
             width: double.infinity,
             decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8)),
             child: _pendingFiles.isEmpty 
-              ? const Center(child: Text("All Clean (Sync OK)", style: TextStyle(color: Colors.greenAccent, fontSize: 12)))
+              ? const Center(child: Text("Tudo enviado", style: TextStyle(color: Colors.greenAccent, fontSize: 14)))
               : ListView.builder(
                   itemCount: _pendingFiles.length,
                   itemBuilder: (context, i) => Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    child: Text(_pendingFiles[i], style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 10, fontFamily: 'monospace')),
+                    child: Text(_pendingFiles[i], style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 14, fontFamily: 'monospace')),
                   ),
                 ),
           ),
@@ -169,11 +146,12 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
                 _loadPendingFiles();
               },
               icon: const Icon(Icons.sync_problem),
-              label: const Text("FORCE SYNC NOW"),
+              label: const Text("Enviar agora"),
               style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white),
             ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -182,11 +160,11 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
+        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
+            Text(title, style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             Text(value, style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
           ],

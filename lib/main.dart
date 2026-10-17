@@ -1,37 +1,57 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'package:ear_training/core/app_config.dart';
 import 'package:ear_training/core/gamification_controller.dart';
-import 'package:ear_training/core/spatial_controller.dart';
-import 'package:ear_training/ui/screens/home_screen.dart';
-import 'package:ear_training/ui/screens/auth_screen.dart';
-import 'package:ear_training/ui/screens/onboarding_screen.dart';
+import 'package:ear_training/ui/audio_lifecycle_guard.dart';
+import 'package:ear_training/ui/purchase_messages.dart';
+import 'package:ear_training/ui/screens/session_gate.dart';
+import 'package:ear_training/ui/screens/startup_error_screen.dart';
 import 'package:ear_training/services/supabase_service.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'package:ear_training/services/event_buffer.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Inicialização de Variáveis de Ambiente e Persistência [SEGURANÇA/INFRA]
+
+  // Release não escreve no logcat: logs de treino carregam dado clínico (OWASP MASVS-STORAGE-2).
+  if (kReleaseMode) {
+    debugPrint = (String? message, {int? wrapWidth}) {};
+  }
+
+  // Fail-fast [SEGURANÇA/INFRA]: build sem configuração válida para numa tela explícita.
+  final configProblems = AppConfig.validate();
+  if (configProblems.isNotEmpty) {
+    runApp(StartupErrorApp(problems: configProblems));
+    return;
+  }
+
   try {
-    await dotenv.load(fileName: ".env");
     await SupabaseService().initialize();
-    
-    // RIGOR CLÍNICO: Sincronização de Telemetria Offline e Escuta de Hardware
+  } catch (e) {
+    debugPrint("Erro na inicialização do Supabase: $e");
+    runApp(const StartupErrorApp(
+        problems: ['Falha ao iniciar a conexão com o servidor.']));
+    return;
+  }
+
+  // RIGOR CLÍNICO: Sincronização de Telemetria Offline e Escuta de Hardware.
+  // Falha aqui não impede o uso do app; o sync roda em segundo plano para não atrasar a abertura.
+  try {
     final buffer = SessionEventBuffer();
     await buffer.init();
-    await buffer.syncOfflineTelemetry();
+    unawaited(buffer.syncOfflineTelemetry());
   } catch (e) {
-    debugPrint("Erro na inicialização: $e");
+    debugPrint("Erro na inicialização da telemetria: $e");
   }
-  
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => GamificationController()),
-        ChangeNotifierProvider(create: (_) => SpatialController()),
       ],
       child: const EarTrainingApp(),
     ),
@@ -41,36 +61,32 @@ void main() async {
 class EarTrainingApp extends StatelessWidget {
   const EarTrainingApp({super.key});
 
+  /// Avisos que chegam fora da tela que os causou (resposta da compra na Play).
+  static final GlobalKey<ScaffoldMessengerState> messengerKey =
+      GlobalKey<ScaffoldMessengerState>();
+
   @override
   Widget build(BuildContext context) {
-    final session = Supabase.instance.client.auth.currentSession;
-    if (session == null) return _buildMaterialApp(const AuthScreen());
-
-    return FutureBuilder(
-      future: Supabase.instance.client
-          .from('profiles')
-          .select('onboarding_completed')
-          .eq('user_id', session.user.id)
-          .single(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildMaterialApp(const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFF00FF41)))));
-        }
-        final isCompleted = snapshot.data?['onboarding_completed'] ?? false;
-        return _buildMaterialApp(isCompleted ? const HomeScreen() : const OnboardingScreen());
-      },
-    );
-  }
-
-  Widget _buildMaterialApp(Widget home) {
     return MaterialApp(
-      title: 'BOSYN - Auditory Rehabilitation',
+      title: 'BOSYN — Treino auditivo',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: messengerKey,
+      // Textos do sistema (voltar, menus, leitor de tela) em português (achado G4: o TalkBack
+      // lia "Back, Back").
+      locale: const Locale('pt', 'BR'),
+      supportedLocales: const [Locale('pt', 'BR')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF0A0A0A),
         primaryColor: const Color(0xFF2563EB),
       ),
-      home: home,
+      // Silencia o áudio sempre que o app sai da frente (ver AudioLifecycleGuard); avisos da
+      // compra aparecem em qualquer tela (PurchaseMessages).
+      builder: (context, child) => PurchaseMessages(
+        messengerKey: messengerKey,
+        child: AudioLifecycleGuard(child: child!),
+      ),
+      home: const SessionGate(),
     );
   }
 }

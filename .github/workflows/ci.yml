@@ -29,18 +29,8 @@ jobs:
         with:
           channel: stable
 
-      # O app espera um .env (carregado via flutter_dotenv como asset).
-      # Em CI usamos valores fictícios — segredos reais nunca entram no repo.
-      - name: Create dummy .env
-        run: |
-          cat > .env <<'EOF'
-          SUPABASE_URL=https://example.supabase.co
-          SUPABASE_ANON_KEY=dummy
-          GOOGLE_TTS_API_KEY=dummy
-          EOF
-          mkdir -p assets/audio
-          touch assets/audio/.gitkeep
-
+      # Análise e testes não precisam de configuração: ela entra só no build, via
+      # --dart-define-from-file (não há mais .env empacotado como asset).
       - name: Install dependencies
         run: flutter pub get
 
@@ -66,7 +56,22 @@ jobs:
         run: dart tool/verify_rules.dart
 
       - name: Run tests
-        run: flutter test --coverage
+        # Cada teste que falha vira uma anotação ::error:: com nome e mensagem, legível pela
+        # API pública (o log completo do job exige login).
+        run: |
+          status=0
+          flutter test --coverage --reporter json > test-results.jsonl || status=$?
+          jq -Rrs '
+            [split("\n")[] | fromjson? | select(type == "object")] as $events
+            | ($events | map(select(.type == "testStart") | {key: (.test.id | tostring), value: .test.name}) | from_entries) as $names
+            | $events[] | select(.type == "error" or .type == "print")
+            # A exceção de verdade chega como evento "print" (bloco "EXCEPTION CAUGHT BY FLUTTER
+            # TEST FRAMEWORK"); o "error" que vem depois só diz "See exception logs above".
+            | ((.error // .message) | .[0:3000] | gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A")) as $text
+            | "::error title=\($names[.testID | tostring] // "teste")::\($text)"
+          ' test-results.jsonl
+          jq -Rrs '[split("\n")[] | fromjson? | select(type == "object" and .type == "done")] | .[0] // "sem evento done"' test-results.jsonl
+          exit $status
         # Limiar de cobertura enforced: ainda não configurado (módulo 12 — suíte real é débito
         # registrado em docs/STATUS.md, não escrita neste bootstrap).
 
@@ -92,24 +97,21 @@ jobs:
         with:
           channel: stable
 
-      # O app espera um .env (carregado via flutter_dotenv como asset).
-      # ATENÇÃO: estes valores são fictícios. Para o app conectar de verdade
-      # ao Supabase, você precisa buildar com suas chaves reais (ver abaixo).
+      # Só valores públicos (URL + chave publishable). A chave do Google TTS NÃO vem mais para o
+      # app — mora nos secrets da Edge Function `tts` (supabase/functions/tts).
+      # Sem os secrets configurados o APK abre na tela de "configuração inválida" (fail-fast).
       - name: Create .env
         run: |
           cat > .env <<EOF
           SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
-          GOOGLE_TTS_API_KEY=${{ secrets.GOOGLE_TTS_API_KEY }}
+          SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY || secrets.SUPABASE_ANON_KEY }}
           EOF
-          mkdir -p assets/audio
-          touch assets/audio/.gitkeep
 
       - name: Install dependencies
         run: flutter pub get
 
       - name: Build debug APK
-        run: flutter build apk --debug
+        run: flutter build apk --debug --dart-define-from-file=.env
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -117,3 +119,134 @@ jobs:
           name: bosyn-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 14
+
+      # APK de PROFILE: é o usado no checklist de escuta no celular. O debug roda em JIT e fica
+      # lento, o que distorce tempo de resposta e fluidez do áudio durante os testes manuais.
+      - name: Build profile APK
+        run: flutter build apk --profile --dart-define-from-file=.env
+
+      - name: Upload profile APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bosyn-profile-apk
+          path: build/app/outputs/flutter-apk/app-profile.apk
+          retention-days: 14
+
+  # Testes do motor nativo (cpp/) compilados no host com sanitizers: pegam estouro de memória,
+  # comportamento indefinido e erros de DSP sem precisar de celular. Cada cpp/tests/*_test.cpp é
+  # um executável independente (ver cpp/tests/check.h).
+  native-tests:
+    name: Native tests (C++ host, ASan/UBSan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile and run cpp/tests (ASan + UBSan)
+        run: |
+          set -e
+          for test in cpp/tests/*_test.cpp; do
+            echo "== $test"
+            g++ -std=c++17 -O1 -g -Wall -Wextra -pthread \
+              -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer \
+              -Icpp -Icpp/tests -o /tmp/native_test "$test" cpp/audio_graph.cpp
+            /tmp/native_test
+          done
+
+      # ThreadSanitizer: acusa corrida de dados entre a thread do Dart e a de áudio.
+      # vm.mmap_rnd_bits=28: kernels novos do runner usam 32 bits de ASLR, que o TSan não suporta.
+      - name: Compile and run cpp/tests (ThreadSanitizer)
+        run: |
+          set -e
+          sudo sysctl vm.mmap_rnd_bits=28
+          for test in cpp/tests/*_test.cpp; do
+            echo "== $test (tsan)"
+            g++ -std=c++17 -O1 -g -pthread -fsanitize=thread \
+              -Icpp -Icpp/tests -o /tmp/native_test_tsan "$test" cpp/audio_graph.cpp
+            TSAN_OPTIONS=halt_on_error=1 /tmp/native_test_tsan
+          done
+
+  # Build de RELEASE descartável: prova que R8/minify, CMake/NDK e assinatura de fallback
+  # funcionam, e trava o requisito de páginas de 16 KB da Google Play (apps com código nativo).
+  # Este APK nunca é distribuído — o AAB da Play sai do botão "2 - Gerar AAB"
+  # (.github/workflows/2-gerar-aab.yml). Sem android/key.properties o Gradle cai na chave debug
+  # aqui, de propósito; o ensaio do AAB no fim do job usa uma chave descartável.
+  release-check:
+    name: Release build (R8 + 16 KB)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Create .env (valores fictícios — só para compilar)
+        run: |
+          cat > .env <<'EOF'
+          SUPABASE_URL=https://example.supabase.co
+          SUPABASE_PUBLISHABLE_KEY=sb_publishable_ci_dummy
+          EOF
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build release APK (obfuscado)
+        run: >
+          flutter build apk --release
+          --obfuscate --split-debug-info=build/debug-info
+          --dart-define-from-file=.env
+
+      - name: Verificar alinhamento de 16 KB (zip + ELF)
+        run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          BUILD_TOOLS="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)"
+          "${BUILD_TOOLS}zipalign" -c -P 16 4 "$APK"
+          mkdir -p build/apk-libs
+          unzip -q -o "$APK" 'lib/*' -d build/apk-libs
+          dart tool/check_elf_alignment.dart build/apk-libs/lib
+
+      # Ensaio do botão "2 - Gerar AAB": mesmo build e mesma conferência (tool/play/), com uma
+      # chave descartável criada aqui — este AAB nunca vai para a Play. Prova a cada push a
+      # assinatura por key.properties, o ID de teste do AdMob no manifesto, a permissão de
+      # compra e o 16 KB dentro do AAB.
+      - name: Ensaio do AAB (chave descartável)
+        run: |
+          SENHA=$(openssl rand -hex 16)
+          keytool -genkeypair -storetype PKCS12 -keystore "$RUNNER_TEMP/ensaio.jks" -alias upload \
+            -keyalg RSA -keysize 2048 -validity 1 -storepass "$SENHA" -keypass "$SENHA" \
+            -dname "CN=Ensaio CI, O=BOSYN, C=BR"
+          bash tool/play/preparar_chave.sh "$RUNNER_TEMP/ensaio.jks" "$SENHA"
+          flutter build appbundle --release \
+            --obfuscate --split-debug-info=build/debug-info \
+            --dart-define-from-file=.env --build-number=1
+          bash tool/play/conferir_aab.sh build/app/outputs/bundle/release/app-release.aab \
+            ca-app-pub-3940256099942544~3347511713
+          rm -f android/key.properties
+
+  # Edge Functions do Supabase (supabase/functions/, Deno): tipos, lint, formato e os testes da
+  # assinatura PRO (_shared/*_test.ts) — a regra que decide quem é PRO roda no servidor.
+  edge-functions:
+    name: Edge Functions (Deno)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Tipos
+        run: deno check supabase/functions/*/index.ts
+
+      - name: Lint e formato
+        run: |
+          deno lint supabase/functions
+          deno fmt --check --line-width 110 supabase/functions
+
+      - name: Testes
+        run: deno test supabase/functions/_shared/
