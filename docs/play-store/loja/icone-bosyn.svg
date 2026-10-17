@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <!-- Ícone do BOSYN: um "B" e duas ondas de som. Frente do ícone adaptativo do Android (108×108,
+       arte dentro do círculo seguro de 66 no centro). Fundo: #0F172A. -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" transform="translate(-3 0)">
+    <path d="M36 33 V75" stroke="#FFFFFF" stroke-width="7"/>
+    <path d="M36 33 H44 a10.5 10.5 0 0 1 0 21 H36" stroke="#FFFFFF" stroke-width="7"/>
+    <path d="M36 54 H46 a10.5 10.5 0 0 1 0 21 H36" stroke="#FFFFFF" stroke-width="7"/>
+    <path d="M65.5 41.5 a17 17 0 0 1 0 25" stroke="#00FF41" stroke-width="6"/>
+    <path d="M71.5 34.5 a27 27 0 0 1 0 39" stroke="#00FF41" stroke-width="6" opacity="0.75"/>
+  </g>
+</svg>

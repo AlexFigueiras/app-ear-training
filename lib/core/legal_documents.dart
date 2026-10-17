@@ -10,7 +10,7 @@ class LegalDocuments {
 
   /// Versão vigente da política, gravada junto com o consentimento no cadastro. Ao mudar a
   /// política, atualize aqui e no cabeçalho do arquivo (test/legal_documents_test.dart confere).
-  static const String privacyPolicyVersion = '2026-10-04';
+  static const String privacyPolicyVersion = '2026-10-17';
 
   /// Aviso de saúde (política "Health Content and Services" da Google Play).
   static const String healthDisclaimer =
