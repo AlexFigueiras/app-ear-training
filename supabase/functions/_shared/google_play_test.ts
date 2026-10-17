@@ -90,7 +90,7 @@ function fakeFetch(responses: Array<(call: Call) => Response>): { fetchFn: typeo
   return { fetchFn, calls };
 }
 
-const tokenResponse = () => Response.json({ access_token: "ya29.token", expires_in: 3600 });
+const tokenResponse = () => Response.json({ access_token: "token-oauth-de-teste", expires_in: 3600 });
 
 Deno.test("lê a assinatura pelo token e reaproveita o token OAuth", async () => {
   const { account } = await testAccount();
@@ -119,7 +119,7 @@ Deno.test("lê a assinatura pelo token e reaproveita o token OAuth", async () =>
     calls[1].url,
     "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/com.bosyn.app/purchases/subscriptionsv2/tokens/tok%2Fen%2B1",
   );
-  assertEquals(calls[1].headers["authorization"], "Bearer ya29.token");
+  assertEquals(calls[1].headers["authorization"], "Bearer token-oauth-de-teste");
 });
 
 Deno.test("token OAuth vencido é renovado", async () => {

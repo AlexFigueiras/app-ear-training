@@ -1,0 +1,67 @@
+name: 1 - Criar chave de upload (só uma vez)
+# Cria a chave que assina o AAB do BOSYN para a Play Store (chave de upload do Play App Signing).
+# Só roda com o repositório PRIVADO: em repositório público, qualquer pessoa logada no GitHub
+# baixa os Artifacts da execução. Com o repositório público, crie a chave no computador
+# (docs/PLAY_STORE.md, seção 3) e cadastre só os segredos.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  chave:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gerar chave de upload
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          JA_TEM_CHAVE: ${{ secrets.KEYSTORE_BASE64 != '' }}
+          PRIVADO: ${{ github.event.repository.private }}
+        run: |
+          falha() {
+            echo "::error::$1"
+            echo "❌ $1" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          }
+          if [ "$PRIVADO" != "true" ]; then
+            falha "Este repositório é público: o pacote com a chave ficaria visível para qualquer pessoa logada no GitHub. Deixe o repositório Private (Settings → General → Danger Zone) ou crie a chave no computador (docs/PLAY_STORE.md, seção 3)."
+          fi
+          if [ -z "$KEYSTORE_PASSWORD" ]; then
+            falha "Crie antes o segredo KEYSTORE_PASSWORD (Settings → Secrets and variables → Actions)."
+          fi
+          if [ ${#KEYSTORE_PASSWORD} -lt 12 ]; then
+            falha "A senha KEYSTORE_PASSWORD precisa ter pelo menos 12 caracteres (dica: 3 ou 4 palavras juntas)."
+          fi
+          if printf '%s' "$KEYSTORE_PASSWORD" | LC_ALL=C grep -q '[^ -~]'; then
+            falha "A senha KEYSTORE_PASSWORD não pode ter acento, ç nem emoji (o Java recusa). Use só letras sem acento, números e símbolos comuns."
+          fi
+          if [ "$JA_TEM_CHAVE" = "true" ]; then
+            falha "O BOSYN já tem chave (segredo KEYSTORE_BASE64). Não crie outra: a Play Store só aceita a chave do primeiro envio."
+          fi
+
+          keytool -genkeypair -v -storetype PKCS12 -keystore bosyn-upload.jks -alias upload \
+            -keyalg RSA -keysize 4096 -validity 10000 \
+            -storepass "$KEYSTORE_PASSWORD" -keypass "$KEYSTORE_PASSWORD" \
+            -dname "CN=BOSYN, O=BOSYN, C=BR"
+          base64 -w0 bosyn-upload.jks > KEYSTORE_BASE64.txt
+          {
+            echo "🔑 Chave criada! Baixe **chave-de-upload** em Artifacts (no fim desta página)."
+            echo ""
+            echo "1. Copie todo o texto de \`KEYSTORE_BASE64.txt\` para o segredo **KEYSTORE_BASE64**."
+            echo "2. Guarde \`bosyn-upload.jks\`, \`KEYSTORE_BASE64.txt\` e a senha em dois lugares seguros."
+            echo "3. Apague este pacote de Artifacts depois de baixar (ícone da lixeira). Ele some sozinho em 1 dia."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chave-de-upload
+          path: |
+            bosyn-upload.jks
+            KEYSTORE_BASE64.txt
+          retention-days: 1

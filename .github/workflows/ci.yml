@@ -167,8 +167,9 @@ jobs:
 
   # Build de RELEASE descartável: prova que R8/minify, CMake/NDK e assinatura de fallback
   # funcionam, e trava o requisito de páginas de 16 KB da Google Play (apps com código nativo).
-  # Este APK nunca é distribuído — o AAB da Play é gerado localmente com a chave de upload
-  # (docs/PLAY_STORE.md). Sem android/key.properties o Gradle cai na chave debug aqui, de propósito.
+  # Este APK nunca é distribuído — o AAB da Play sai do botão "2 - Gerar AAB"
+  # (.github/workflows/2-gerar-aab.yml). Sem android/key.properties o Gradle cai na chave debug
+  # aqui, de propósito; o ensaio do AAB no fim do job usa uma chave descartável.
   release-check:
     name: Release build (R8 + 16 KB)
     runs-on: ubuntu-latest
@@ -208,3 +209,44 @@ jobs:
           mkdir -p build/apk-libs
           unzip -q -o "$APK" 'lib/*' -d build/apk-libs
           dart tool/check_elf_alignment.dart build/apk-libs/lib
+
+      # Ensaio do botão "2 - Gerar AAB": mesmo build e mesma conferência (tool/play/), com uma
+      # chave descartável criada aqui — este AAB nunca vai para a Play. Prova a cada push a
+      # assinatura por key.properties, o ID de teste do AdMob no manifesto, a permissão de
+      # compra e o 16 KB dentro do AAB.
+      - name: Ensaio do AAB (chave descartável)
+        run: |
+          SENHA=$(openssl rand -hex 16)
+          keytool -genkeypair -storetype PKCS12 -keystore "$RUNNER_TEMP/ensaio.jks" -alias upload \
+            -keyalg RSA -keysize 2048 -validity 1 -storepass "$SENHA" -keypass "$SENHA" \
+            -dname "CN=Ensaio CI, O=BOSYN, C=BR"
+          bash tool/play/preparar_chave.sh "$RUNNER_TEMP/ensaio.jks" "$SENHA"
+          flutter build appbundle --release \
+            --obfuscate --split-debug-info=build/debug-info \
+            --dart-define-from-file=.env --build-number=1
+          bash tool/play/conferir_aab.sh build/app/outputs/bundle/release/app-release.aab \
+            ca-app-pub-3940256099942544~3347511713
+          rm -f android/key.properties
+
+  # Edge Functions do Supabase (supabase/functions/, Deno): tipos, lint, formato e os testes da
+  # assinatura PRO (_shared/*_test.ts) — a regra que decide quem é PRO roda no servidor.
+  edge-functions:
+    name: Edge Functions (Deno)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Tipos
+        run: deno check supabase/functions/*/index.ts
+
+      - name: Lint e formato
+        run: |
+          deno lint supabase/functions
+          deno fmt --check --line-width 110 supabase/functions
+
+      - name: Testes
+        run: deno test supabase/functions/_shared/
