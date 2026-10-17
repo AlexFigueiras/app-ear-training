@@ -47,8 +47,12 @@ class AdsService extends ChangeNotifier {
   int remainingToday([DateTime? now]) => _quota.remaining(
       now ?? DateTime.now(), MonetizationConfig.rewardedSessionsPerDay);
 
-  /// Pede o consentimento onde a lei exige e liga o SDK. Idempotente.
-  Future<void> start() => _starting ??= _start();
+  /// Pede o consentimento onde a lei exige e liga o SDK. Pode ser chamado várias vezes: se o
+  /// consentimento não saiu (ex.: sem conexão ao abrir), a próxima chamada tenta de novo.
+  Future<void> start() {
+    if (_canRequestAds) return Future.value();
+    return _starting ??= _start().whenComplete(() => _starting = null);
+  }
 
   Future<void> _start() async {
     _quota = await _readQuota();
@@ -155,8 +159,15 @@ class AdsService extends ChangeNotifier {
       onAdDismissedFullScreenContent: close,
       onAdFailedToShowFullScreenContent: (shown, error) => close(shown),
     );
-    await ad.show(onUserEarnedReward: (_, __) => earned = true);
-    await closed.future;
+    try {
+      await ad.show(onUserEarnedReward: (_, __) => earned = true);
+      // Rede de segurança: se o SDK não avisar o fechamento, a Home não fica esperando.
+      await closed.future
+          .timeout(const Duration(minutes: 5), onTimeout: () => close(ad));
+    } catch (e) {
+      debugPrint('[ADS] vídeo não abriu: $e');
+      close(ad);
+    }
     _loadRewarded();
 
     if (earned) {

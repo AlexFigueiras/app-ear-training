@@ -51,6 +51,9 @@ abstract class PurchaseVerifier {
 
 enum BillingPhase { idle, purchasing, verifying }
 
+/// Resultado da conferência de uma compra no servidor.
+enum _Verified { pro, notPro, explained }
+
 /// Assinatura PRO pelo Google Play Billing [MONETIZAÇÃO].
 ///
 /// O app nunca decide o plano: cada compra (nova ou restaurada) vai para o servidor, que lê o
@@ -101,14 +104,19 @@ class BillingService extends ChangeNotifier {
   static String accountIdFor(String userId) =>
       sha256.convert(utf8.encode(userId)).toString();
 
-  /// Liga a escuta das compras e carrega os planos. Pode ser chamado várias vezes.
-  Future<void> start() => _starting ??= _start();
+  /// Liga a escuta das compras e carrega os planos. Pode ser chamado várias vezes: enquanto a
+  /// Play não responde ou os planos não vêm (ex.: sem conexão ao abrir), cada chamada tenta de
+  /// novo.
+  Future<void> start() {
+    if (_available && _offers.isNotEmpty) return Future.value();
+    return _starting ??= _start().whenComplete(() => _starting = null);
+  }
 
   Future<void> _start() async {
     try {
       _available = await _store.isAvailable();
       if (!_available) return;
-      _subscription = _store.purchaseStream.listen(_onPurchases,
+      _subscription ??= _store.purchaseStream.listen(_onPurchases,
           onError: (Object e) => debugPrint('[BILLING] stream: $e'));
       _offers = PlanOffer.fromStore(
           await _store.loadOffers(MonetizationConfig.subscriptionProductIds));
@@ -131,7 +139,10 @@ class BillingService extends ChangeNotifier {
     try {
       final opened =
           await _store.buy(productId, accountId: accountIdFor(userId));
-      if (!opened) _setPhase(BillingPhase.idle);
+      if (!opened) {
+        _setPhase(BillingPhase.idle);
+        _say('Este plano não está disponível agora. Tente de novo mais tarde.');
+      }
     } catch (e) {
       debugPrint('[BILLING] compra não abriu: $e');
       _setPhase(BillingPhase.idle);
@@ -174,6 +185,7 @@ class BillingService extends ChangeNotifier {
     final userRestore = _userRestore;
     _userRestore = false;
     var restoredPro = false;
+    var explained = false;
 
     for (final purchase in purchases) {
       switch (purchase.status) {
@@ -184,10 +196,11 @@ class BillingService extends ChangeNotifier {
               'confirmar o pagamento.');
         case PurchaseStatus.purchased:
         case PurchaseStatus.restored:
-          final entitled = await _verify(purchase,
+          final verified = await _verify(purchase,
               announce:
                   purchase.status == PurchaseStatus.purchased || userRestore);
-          restoredPro = restoredPro || entitled;
+          restoredPro = restoredPro || verified == _Verified.pro;
+          explained = explained || verified == _Verified.explained;
         case PurchaseStatus.error:
           _setPhase(BillingPhase.idle);
           _say('A compra não foi concluída. Tente de novo.');
@@ -198,18 +211,19 @@ class BillingService extends ChangeNotifier {
       }
     }
 
-    if (userRestore) {
+    // Um aviso por restauração: se a recusa ou a falha já foi explicada, não diz "nenhuma".
+    if (userRestore && (restoredPro || !explained)) {
       _say(restoredPro
           ? 'Assinatura encontrada: plano PRO ativo.'
           : 'Nenhuma assinatura ativa nesta conta Google.');
     }
   }
 
-  /// Confere no servidor e conclui a compra na Play. Devolve se o PRO ficou ativo.
-  Future<bool> _verify(PurchaseDetails purchase,
+  /// Confere no servidor e conclui a compra na Play.
+  Future<_Verified> _verify(PurchaseDetails purchase,
       {required bool announce}) async {
     final token = purchase.verificationData.serverVerificationData;
-    if (!_inFlight.add(token)) return false;
+    if (!_inFlight.add(token)) return _Verified.notPro;
     _setPhase(BillingPhase.verifying);
     try {
       final plan = await _verifier.verify(token);
@@ -221,7 +235,7 @@ class BillingService extends ChangeNotifier {
             : 'O Google Play ainda não confirmou o pagamento. Toque em "Restaurar compra" '
                 'daqui a alguns minutos.');
       }
-      return plan.entitled;
+      return plan.entitled ? _Verified.pro : _Verified.notPro;
     } on PurchaseRejected catch (e) {
       debugPrint('[BILLING] servidor recusou: $e');
       if (!e.isDefinitive) {
@@ -230,13 +244,13 @@ class BillingService extends ChangeNotifier {
               'Não foi possível confirmar a compra agora. Vamos conferir de novo '
               'na próxima vez que você abrir o app.');
         }
-        return false;
+        return announce ? _Verified.explained : _Verified.notPro;
       }
       // Recusa definitiva: a compra é válida na conta Google (ex.: ligada a outra conta do
       // BOSYN), então é concluída; só não libera o PRO aqui.
       await _complete(purchase);
       if (announce) _say(_rejectionMessage(e.code));
-      return false;
+      return announce ? _Verified.explained : _Verified.notPro;
     } finally {
       _inFlight.remove(token);
       _setPhase(BillingPhase.idle);

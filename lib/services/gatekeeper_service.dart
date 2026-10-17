@@ -27,8 +27,12 @@ class GatekeeperService {
           .maybeSingle();
       return ProAccess.fromProfile(row);
     } on PostgrestException catch (e) {
-      // 42703: coluna inexistente — banco ainda sem a migration 004. Lê só o plano.
-      if (e.code != '42703') rethrow;
+      // Coluna inexistente (42703 do Postgres ou PGRST204 do PostgREST): banco ainda sem a
+      // migration 004. Lê só o plano.
+      final missingColumn = e.code == '42703' ||
+          e.code == 'PGRST204' ||
+          e.message.contains('subscription_expires_at');
+      if (!missingColumn) rethrow;
       debugPrint(
           '[GATEKEEPER] migration 004 pendente: lendo só subscription_status');
       final row = await profiles

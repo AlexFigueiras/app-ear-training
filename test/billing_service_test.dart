@@ -10,6 +10,7 @@ class _FakeStore implements PurchaseStore {
   final completed = <String>[];
   final bought = <String>[];
   bool available = true;
+  bool buyOpens = true;
   List<PurchaseDetails> restorable = [];
 
   @override
@@ -28,7 +29,7 @@ class _FakeStore implements PurchaseStore {
   @override
   Future<bool> buy(String productId, {required String accountId}) async {
     bought.add('$productId:$accountId');
-    return true;
+    return buyOpens;
   }
 
   @override
@@ -194,5 +195,45 @@ void main() {
     await pumpEventQueue();
     expect(offline.bought, isEmpty);
     expect(said.single, contains('não está disponível'));
+  });
+
+  test('restauração com assinatura de outra conta: só o aviso que explica',
+      () async {
+    verifier.failure =
+        const PurchaseRejected(409, 'purchase_owned_by_other_account');
+    store.restorable = [_purchase('tok-1', PurchaseStatus.restored)];
+    await billing.restore(userInitiated: true);
+    await pumpEventQueue();
+    expect(messages, hasLength(1));
+    expect(messages.single, contains('ligada a outra conta do BOSYN'));
+  });
+
+  test('restauração sem conexão com o servidor: não diz que não há assinatura',
+      () async {
+    verifier.failure = const PurchaseRejected(0, 'http_0');
+    store.restorable = [_purchase('tok-1', PurchaseStatus.restored)];
+    await billing.restore(userInitiated: true);
+    await pumpEventQueue();
+    expect(messages.single, contains('próxima vez que você abrir o app'));
+  });
+
+  test('plano que não carregou: avisa em vez de ficar quieto', () async {
+    store.buyOpens = false;
+    await billing.buy('bosyn_pro_anual');
+    await pumpEventQueue();
+    expect(messages.single, contains('não está disponível agora'));
+    expect(billing.phase, BillingPhase.idle);
+  });
+
+  test('Play fora do ar ao abrir: a próxima chamada tenta de novo', () async {
+    final flaky = _FakeStore()..available = false;
+    final service = BillingService.forTest(flaky, verifier, () => 'user-1');
+    await service.start();
+    expect(service.storeAvailable, isFalse);
+
+    flaky.available = true;
+    await service.start();
+    expect(service.storeAvailable, isTrue);
+    expect(service.offers, hasLength(2));
   });
 }
