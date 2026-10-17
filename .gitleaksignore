@@ -1,0 +1,4 @@
+# Falsos positivos do Gitleaks (job "Secret scan" do CI), um fingerprint por linha.
+# docs/play-store/folha-de-respostas.html: "var KEY" era só o nome onde a Folha de Respostas
+# guarda as marcações no navegador, não um segredo. A variável foi renomeada no commit seguinte.
+5e970690db9ac1932534c84264b83c3cd39b4866:docs/play-store/folha-de-respostas.html:generic-api-key:226

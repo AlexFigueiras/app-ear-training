@@ -223,9 +223,9 @@ Primeira versão do BOSYN! Treino auditivo com fones: palavras parecidas e fala 
 </div>
 <script>
 (function () {
-  var KEY = "bosyn-folha-v1";
+  var MEMORIA = "bosyn-folha-v1";
   var saved = {};
-  try { saved = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { saved = {}; }
+  try { saved = JSON.parse(localStorage.getItem(MEMORIA) || "{}") || {}; } catch (e) { saved = {}; }
   var boxes = Array.prototype.slice.call(document.querySelectorAll("input[data-step]"));
   function paint() {
     var done = 0;
@@ -244,7 +244,7 @@ Primeira versão do BOSYN! Treino auditivo com fones: palavras parecidas e fala 
     b.checked = !!saved[b.getAttribute("data-step")];
     b.addEventListener("change", function () {
       saved[b.getAttribute("data-step")] = b.checked;
-      try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+      try { localStorage.setItem(MEMORIA, JSON.stringify(saved)); } catch (e) {}
       paint();
     });
   });
