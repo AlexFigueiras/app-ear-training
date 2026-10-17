@@ -8,7 +8,8 @@ App Flutter de **treino auditivo** para a percepção de consoantes agudas e da 
 - teste de audição (triagem relativa);
 - três treinos adaptativos: palavras parecidas, conversa no barulho e voz de um lado com barulho
   do outro;
-- medida de progresso por dígitos no ruído a cada 14 dias.
+- medida de progresso por dígitos no ruído a cada 14 dias;
+- plano grátis com anúncios (AdMob) ou assinatura PRO pelo Google Play, à escolha de quem usa.
 
 O motor de áudio é nativo (C++/Oboe via FFI). Regras de produto em
 [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md).
@@ -47,10 +48,13 @@ dart format --output=none --set-exit-if-changed lib test tool      # checar form
 flutter test                                                        # testes
 flutter test --coverage                                             # testes com cobertura
 dart tool/verify_rules.dart                                     # verify-rules (tamanho, secrets, config de release)
+deno test supabase/functions/_shared/                           # regras da assinatura PRO (Edge Functions)
+dart tool/legal_html.dart                                       # páginas da política e da exclusão de conta para o site
 ```
 
-Publicação na Google Play (assinatura, AAB, formulários do Play Console): ver
-[`docs/PLAY_STORE.md`](docs/PLAY_STORE.md). Revisão de segurança: [`docs/SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md).
+Publicação na Google Play (botões "1 - Criar chave" e "2 - Gerar AAB" em Actions, assinatura,
+anúncios, formulários do Play Console): ver [`docs/PLAY_STORE.md`](docs/PLAY_STORE.md) e o
+diário [`PROGRESSO.md`](PROGRESSO.md). Revisão de segurança: [`docs/SECURITY_REVIEW.md`](docs/SECURITY_REVIEW.md).
 
 Não há comando `generate` (scaffolding automático) neste projeto — ver `AGENTS.md` seção 2.
 
@@ -59,7 +63,8 @@ Não há comando `generate` (scaffolding automático) neste projeto — ver `AGE
 Não há banco/servidor local para subir. O backend é o Supabase, gerenciado externamente; o app
 fala com ele via `supabase_flutter` usando `SUPABASE_URL`/`SUPABASE_PUBLISHABLE_KEY` do `.env`.
 O que exige segredo roda em Edge Functions versionadas em [`supabase/functions/`](supabase/functions/)
-(`tts`: proxy do Google Text-to-Speech; `delete-account`: exclusão de conta). Mudanças de schema
+(`tts`: proxy do Google Text-to-Speech; `delete-account`: exclusão de conta; `play-subscription`
+e `play-rtdn`: conferência da assinatura PRO na Google Play). Mudanças de schema
 ficam nos `supabase_migration_*.sql` da raiz, aplicados à mão no SQL Editor.
 
 ## Estrutura e governança

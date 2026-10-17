@@ -147,6 +147,7 @@ dart format --output=none --set-exit-if-changed lib test tool   # checar formata
 flutter test                                                 # rodar testes
 flutter test --coverage                                      # rodar testes com cobertura
 dart tool/verify_rules.dart                               # verify-rules (módulo 06 + config de release)
+deno test supabase/functions/_shared/                     # regras da assinatura PRO (Edge Functions, Deno)
 flutter build appbundle --release --obfuscate --split-debug-info=build/debug-info --dart-define-from-file=.env  # AAB da Play (exige android/key.properties)
 ```
 

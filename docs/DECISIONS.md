@@ -1,6 +1,108 @@
 # DECISIONS — histórico vivo de decisões
 > Entradas no topo (mais recente primeiro). Estado do que existe fica em `docs/STATUS.md`.
 
+## [2026-10-17] Publicação na Play pela skill adaptada + assinatura PRO ou anúncios
+- **Status:** accepted (CI verde; falta o teste no celular e as ações humanas do `PROGRESSO.md`)
+- **Contexto:**
+  - O usuário pediu para aplicar a skill "publicar na Play Store" neste repositório, "ajustando o
+    que for necessário". A skill foi feita para jogos HTML com Capacitor, AdMob e uma criança
+    guiada por um adulto.
+  - No meio da tarefa, o usuário pediu a diferença em relação aos jogos: **assinatura ou
+    anúncios, à escolha de quem usa**, e "Google Play ao invés da Stripe se for mais fácil".
+  - O `main` estava atrás: o app atual e a preparação para a Play (04/10) estão na branch
+    `claude/treino-eficaz`, ainda sem PR. A branch desta tarefa partiu dela (fast-forward), para
+    não reconstruir o que já existia (AGENTS.md, regra 7).
+- **Decisões do usuário:**
+  - Monetização por assinatura **ou** anúncios. Novas dependências de runtime `in_app_purchase`
+    (oficial do Flutter; Play Billing Library 8, exigida desde 31/08/2026) e
+    `google_mobile_ads` (oficial do Google): o pedido do usuário é a aprovação exigida pelo
+    AGENTS.md, seção 2, item 4.
+  - Google Play Billing no lugar do Stripe. Não é só mais fácil: a política de pagamentos da
+    Play exige o Billing para assinatura digital vendida dentro do app.
+- **Decisões:**
+  - **Modelo:**
+    - Grátis: "Palavras parecidas", teste de audição e medida de progresso, com banner só no
+      rodapé da Home.
+    - PRO (mensal ou anual, `bosyn_pro_mensal`/`bosyn_pro_anual`, um plano base cada e sem
+      oferta): todos os treinos, sem anúncio.
+    - Quem não assina libera 1 sessão PRO com um vídeo premiado, até 2 por dia.
+    - **Nunca há anúncio no teste de audição ou num treino:** o som e o toque de um anúncio
+      estragariam o exercício.
+  - **Servidor decide o plano:**
+    - Edge Function `play-subscription` lê o token na Google Play Developer API (conta de serviço,
+      JWT RS256 com Web Crypto, sem SDK), grava `subscription_status`/`subscription_expires_at`
+      com a chave secreta e só então confirma a compra (acknowledge). Se a gravação falhar, a
+      Play reembolsa em 3 dias, que é o certo.
+    - `play-rtdn` (Pub/Sub push com segredo na URL, deploy `--no-verify-jwt`) trata renovação,
+      cancelamento, suspensão e reembolso sem depender de o app abrir.
+    - O app manda `obfuscatedAccountId` = SHA-256 do id do usuário; o servidor recusa token de
+      outra conta. Um token só libera o PRO para uma conta (`play_subscriptions`, migration
+      004). 'elite' = PRO dado à mão, que a sincronização nunca mexe.
+    - O app conclui a compra na Play só depois da resposta do servidor. Ao abrir a Home,
+      `restorePurchases` confere renovação e compra que ficou sem conferência por falta de
+      conexão.
+  - **Anúncios com cuidado de app de saúde:**
+    - não personalizados (`npa=1`), conteúdo "PG", consentimento UMP;
+    - `DELAY_APP_MEASUREMENT_INIT`, e o SDK só é ligado para o plano grátis;
+    - banner no slot de rodapé do Scaffold, com 8 px de folga, contra clique acidental.
+  - **ID do app no AdMob** vem do mesmo `.env` do app: o Flutter repassa os dart-defines ao
+    Gradle e o `manifestPlaceholders` os lê. Sem ID, vai o de teste do Google (sem ID válido o
+    SDK fecha o app ao abrir); o `verify_rules` trava a falta do meta-data.
+  - **Botões da skill para Flutter:**
+    - `1-criar-chave` (PKCS12, alias `upload`) recusa repositório público, porque Artifacts de
+      repositório público são baixáveis por qualquer pessoa logada.
+    - `2-gerar-aab`: `flutter build appbundle` com `key.properties` escrito dos segredos; número
+      `run_number` + `VERSION_OFFSET`; anúncios teste/reais com a validação de IDs da skill;
+      Supabase só com chave pública; política sem `[PREENCHER]` em produção (ela vai dentro do
+      app); símbolos do Dart guardados à parte.
+    - Scripts em `tool/play/` usados pelo botão e pelo ensaio do CI: nenhuma divergência entre
+      os dois.
+    - A senha da chave tem que ser ASCII: o keytool falha com acento (descoberto no teste).
+  - **Loja:**
+    - ícone adaptativo próprio (B + ondas de som, com camada monocromática);
+    - abertura escura;
+    - textos contados por código, com os avisos de saúde exigidos;
+    - Folha de Respostas publicada como artifact privado;
+    - páginas do site geradas dos mesmos `docs/legal/*.md` do app (`tool/legal_html.dart`).
+  - **Tom:** a skill fala com uma criança; aqui o responsável é o Alex, então os textos são para
+    adulto. Dados conhecidos da skill aproveitados: conta de organização BOSYN (sem teste
+    fechado obrigatório), contato público BOSYN/contato@bosyn.com.br, site
+    `alexfigueiras.github.io` com o `app-ads.txt` da conta do AdMob.
+- **Consequências:**
+  - O Data safety muda: o SDK do AdMob coleta e compartilha ID de publicidade, local aproximado,
+    interações e diagnóstico. O app coleta histórico de compras. Anúncios: **Sim**. ID de
+    publicidade: **Sim**. Classificação: "Compras digitais: Sim".
+  - A política de privacidade passou para a versão 2026-10-17. O consentimento gravado no
+    cadastro passa a citar essa versão; a finalidade do dado de saúde não mudou, então quem já
+    aceitou não precisa aceitar de novo.
+  - A liberação por vídeo é só no aparelho (limite diário local). É um convite a experimentar,
+    não um direito a proteger. Verificação no servidor (SSV do AdMob) fica para quando valer a
+    pena.
+  - Os botões só aparecem em Actions depois do merge no `main`.
+- **Alternativas consideradas:**
+  - Stripe para a assinatura: viola a política de pagamentos da Play.
+  - Intersticial: a skill não usa, irrita e corta o treino.
+  - Banner durante o treino: atrapalha o áudio e o toque.
+  - Conferir a compra só no app: qualquer pessoa liberaria o PRO, como no C2 da revisão de
+    segurança.
+  - Sem RTDN, só restauração ao abrir: um reembolso do plano anual deixaria o PRO ativo por até
+    um ano.
+  - Chave gerada em Artifact de repositório público: o pacote ficaria visível.
+  - `url_launcher` para abrir a página de assinaturas: um canal nativo de poucas linhas evita a
+    dependência.
+- **Verificação:**
+  - `flutter analyze` limpo; 135 testes Dart; 29 testes Deno; `verify_rules` com as travas novas
+    testadas nos dois sentidos.
+  - Scripts de `tool/play/` testados localmente: chave certa/errada, duas chaves, AAB debug, sem
+    assinatura, ID errado e 4 KB.
+  - actionlint e shellcheck nos workflows e scripts novos.
+  - CI verde nos runs 39053780503 (assinatura e anúncios) e 39054597685 (os 6 jobs, com o AAB de
+    ensaio e o job Deno).
+  - Revisão do próprio diff antes do commit final: restauração pedida pela pessoa com um aviso só;
+    aviso quando o plano não carregou; nova tentativa da Play e do consentimento depois de falha
+    na abertura; vídeo que não abre não trava a Home; fallback da migration 004 também para
+    PGRST204.
+
 ## [2026-10-05] Plano "treino eficaz" — Etapa 12 (documentação final + PR)
 - **Status:** accepted (PR aguardando aprovação do usuário)
 - **Contexto:** depois das Etapas 0–11, os documentos de produto ainda descreviam o app antigo:

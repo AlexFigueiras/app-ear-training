@@ -11,6 +11,19 @@ segue [Conventional Commits](https://www.conventionalcommits.org/pt-br/) — o `
 
 ## [Unreleased]
 
+### Added (monetização e publicação — 2026-10-17)
+- Assinatura PRO pelo Google Play Billing (`in_app_purchase`, Billing Library 8): planos mensal e
+  anual, restauração, conferência de cada compra no servidor (Edge Functions `play-subscription`
+  e `play-rtdn`, migration 004).
+- Anúncios do AdMob só no plano grátis (`google_mobile_ads`): banner na Home e vídeo premiado
+  que libera 1 sessão PRO (2 por dia), não personalizados, com consentimento UMP.
+- Folha do PRO com preço, renovação e cancelamento; seção "Seu plano" na conta (gerenciar no
+  Google Play, restaurar, privacidade dos anúncios).
+- Botões do GitHub "1 - Criar chave de upload" e "2 - Gerar AAB para a Play Store", scripts em
+  `tool/play/`, ensaio do AAB e job `edge-functions` no CI.
+- Ícone adaptativo do BOSYN, recurso gráfico, ficha da loja, Folha de Respostas, `PROGRESSO.md` e
+  `tool/legal_html.dart`.
+
 ### Added (prontidão Google Play — 2026-10-04)
 - Tela Conta e Privacidade: sair, excluir conta (com reautenticação) e política de privacidade
   dentro do app; Edge Function `delete-account`.
@@ -29,7 +42,9 @@ segue [Conventional Commits](https://www.conventionalcommits.org/pt-br/) — o `
 - Configuração entra por `--dart-define-from-file=.env`, com validação fail-fast no boot.
   `SUPABASE_PUBLISHABLE_KEY` substitui `SUPABASE_ANON_KEY`, que ainda é aceito.
 - `supabase_flutter` 2.12 → 2.18 (`publishableKey`).
-- Paywall: PRO aparece como "em breve" até integrar o Google Play Billing.
+- Paywall: PRO aparece como "em breve" até integrar o Google Play Billing (substituído em
+  2026-10-17 pela folha "assinar ou ver um vídeo").
+- Política de privacidade 2026-10-17: AdMob, assinatura e contato contato@bosyn.com.br.
 
 ### Removed
 - Permissões `RECORD_AUDIO` e `BLUETOOTH_*`, que não eram usadas, e a tela que bloqueava o app
