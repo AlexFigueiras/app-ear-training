@@ -1,7 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Mínimo privilégio (política de permissões da Play + LGPD art. 6º, III): o app não grava
          áudio nem usa APIs de Bluetooth — a detecção de fones usa AudioManager.getDevices(), que
-         não exige permissão. RECORD_AUDIO/BLUETOOTH_* foram removidas. Ver docs/DECISIONS.md. -->
+         não exige permissão. RECORD_AUDIO/BLUETOOTH_* foram removidas. Ver docs/DECISIONS.md.
+         Entram pelas bibliotecas (manifest merge): com.android.vending.BILLING (assinatura PRO)
+         e ACCESS_NETWORK_STATE + com.google.android.gms.permission.AD_ID (anúncios do AdMob;
+         declarar "ID de publicidade" na Play Console, docs/PLAY_STORE.md). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
@@ -44,6 +47,16 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- AdMob (lib/services/ads_service.dart): o ID do app vem do .env pelo Gradle
+             (manifestPlaceholders em android/app/build.gradle.kts); sem ele, o ID de teste. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="${admobAppId}" />
+        <!-- A medição do SDK de anúncios só começa quando o app liga os anúncios (plano grátis):
+             para quem assina o PRO, o AdMob não coleta nada. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.DELAY_APP_MEASUREMENT_INIT"
+            android:value="true" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

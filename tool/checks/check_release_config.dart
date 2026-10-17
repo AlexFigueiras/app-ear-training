@@ -15,6 +15,10 @@ final RegExp _exampleAppId =
 final RegExp _releaseDebugSigning = RegExp(
   r'''release\s*\{[^}]*signingConfig\s*=\s*signingConfigs\.getByName\("debug"\)''',
 );
+final RegExp _admobAppIdMeta = RegExp(
+  r'''android:name="com\.google\.android\.gms\.ads\.APPLICATION_ID"\s+android:value="\$\{admobAppId\}"''',
+);
+const String _admobPlaceholder = 'manifestPlaceholders["admobAppId"]';
 
 Future<List<CheckResult>> checkReleaseConfig() async {
   final results = <CheckResult>[];
@@ -48,6 +52,11 @@ Future<List<CheckResult>> checkReleaseConfig() async {
       fail(
           '$_gradlePath assina o release sempre com a chave debug: a Play Console recusa.');
     }
+    if (!gradle.contains(_admobPlaceholder)) {
+      fail(
+          '$_gradlePath sem $_admobPlaceholder: o manifesto fica sem o ID do AdMob e o app '
+          'fecha ao abrir.');
+    }
   }
 
   final manifest = read(_manifestPath);
@@ -55,6 +64,11 @@ Future<List<CheckResult>> checkReleaseConfig() async {
     fail(
         '$_manifestPath sem android:allowBackup="false": sessão e dado clínico iriam para '
         'backup em nuvem.');
+  }
+  if (manifest != null && !_admobAppIdMeta.hasMatch(manifest)) {
+    fail(
+        '$_manifestPath sem o meta-data com.google.android.gms.ads.APPLICATION_ID = '
+        '\${admobAppId}: sem ele o SDK do AdMob fecha o app ao abrir.');
   }
 
   return results;

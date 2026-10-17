@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -12,17 +14,22 @@ import '../../screens/progress_screen.dart';
 import '../../screens/spatial_attention_screen.dart';
 import '../../screens/speech_in_noise_screen.dart';
 import '../../screens/widgets/technical_dashboard.dart';
+import '../../services/ads_service.dart';
+import '../../services/billing_service.dart';
 import '../../services/gatekeeper_service.dart';
 import '../../services/supabase_service.dart';
 import '../../training/digits_in_noise.dart';
 import '../../training/progress_rules.dart';
 import 'account_screen.dart';
 import 'home/daily_goal_card.dart';
+import 'home/home_banner_ad.dart';
+import 'home/pro_gate.dart';
 import 'home/training_progress_section.dart';
 import 'home_widgets.dart';
 
 /// Tela inicial: próximo passo, meta do dia, evolução por treino e os treinos (Etapa 10 do
-/// plano; achados E2/E3 da auditoria de UX).
+/// plano; achados E2/E3 da auditoria de UX). Quem não assina vê o banner no rodapé e pode
+/// liberar um treino PRO por assinatura ou vídeo (pro_gate.dart).
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -33,6 +40,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _isLoadingData = true;
   bool _hasPro = false;
+  int _seenPlanVersion = BillingService().planVersion;
   Audiogram? _audiogram;
   List<RehabSession> _rehabHistory = [];
 
@@ -45,6 +53,22 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _loadUserData();
+    BillingService().addListener(_onBillingChanged);
+    unawaited(BillingService().checkOnLaunch());
+  }
+
+  @override
+  void dispose() {
+    BillingService().removeListener(_onBillingChanged);
+    super.dispose();
+  }
+
+  /// O servidor confirmou um plano (compra ou restauração): relê o acesso.
+  void _onBillingChanged() {
+    final version = BillingService().planVersion;
+    if (version == _seenPlanVersion || !mounted) return;
+    _seenPlanVersion = version;
     _loadUserData();
   }
 
@@ -65,6 +89,8 @@ class _HomeScreenState extends State<HomeScreen> {
       final history = results[2] as List<RehabSession>;
       final hasPro = await GatekeeperService().checkAccess(3).catchError((_) => false);
       if (!mounted) return;
+      // Anúncio só para o plano grátis; quem assina nunca liga o SDK do AdMob.
+      if (!hasPro) unawaited(AdsService().start());
 
       final controller = context.read<GamificationController>();
       if (gamData != null) controller.fromMap(gamData);
@@ -113,8 +139,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final hasAccess = await GatekeeperService().checkAccess(level);
     if (!context.mounted) return;
     if (!hasAccess) {
-      showProComingSoonSheet(context);
-      return;
+      final title = TrainingLevel.all.firstWhere((t) => t.level == level).title;
+      final unlocked = await offerProSession(context, trainingTitle: title);
+      if (!unlocked || !context.mounted) return;
     }
     await _open(switch (level) {
       2 => PhonemicDiscriminationScreen(audiogram: audiogram),
@@ -197,6 +224,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0A),
+      bottomNavigationBar: _isLoadingData || _hasPro ? null : const HomeBannerAd(),
       body: SafeArea(
         child: _isLoadingData
             ? const Center(child: CircularProgressIndicator(color: HomeColors.accent))

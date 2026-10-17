@@ -12,14 +12,14 @@ void main() {
         ),
       );
 
-  testWidgets('card de treino reflete o plano: bloqueado mostra "em breve"',
+  testWidgets('card de treino reflete o plano: bloqueado diz como liberar',
       (tester) async {
     final level = TrainingLevel.all[1];
     await tester
         .pumpWidget(host(LevelCard(level: level, locked: true, onTap: () {})));
 
     expect(find.text('Voz de um lado, barulho do outro'), findsOneWidget);
-    expect(find.text('Plano PRO, em breve'), findsOneWidget);
+    expect(find.text('Plano PRO ou um vídeo por sessão'), findsOneWidget);
     expect(find.byIcon(Icons.lock_outline), findsOneWidget);
     expect(find.text('REQUER PRO'), findsNothing);
   });
@@ -39,30 +39,6 @@ void main() {
     await tester.tap(find.text('Conversa no barulho'));
     expect(tapped, isTrue);
     handle.dispose();
-  });
-
-  testWidgets('aviso do PRO é honesto e fecha com "Entendi"', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(360, 640));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(MaterialApp(
-      home: Builder(
-        builder: (context) => Scaffold(
-          body: TextButton(
-              onPressed: () => showProComingSoonSheet(context),
-              child: const Text('abrir')),
-        ),
-      ),
-    ));
-    await tester.tap(find.text('abrir'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Plano PRO em breve'), findsOneWidget);
-    expect(find.textContaining('ainda não está à venda'), findsOneWidget);
-    expect(find.textContaining('Nada será cobrado'), findsOneWidget);
-
-    await tester.tap(find.text('Entendi'));
-    await tester.pumpAndSettle();
-    expect(find.text('Plano PRO em breve'), findsNothing);
   });
 
   testWidgets('cartão de próximo passo cabe com fonte em 200% em 360x640',

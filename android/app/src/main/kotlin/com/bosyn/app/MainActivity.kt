@@ -1,8 +1,11 @@
 package com.bosyn.app
 
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.net.Uri
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -24,6 +27,26 @@ class MainActivity : FlutterActivity() {
                     )
                     "outputRoute" -> result.success(outputRoute(audio))
                     else -> result.notImplemented()
+                }
+            }
+        // Links externos (lib/services/external_links.dart): página de assinaturas do Google Play
+        // e páginas legais. Só https; sem pacote novo.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "bosyn/external")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "openUrl") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                val url = call.argument<String>("url")
+                if (url == null || !url.startsWith("https://")) {
+                    result.success(false)
+                    return@setMethodCallHandler
+                }
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    result.success(true)
+                } catch (e: ActivityNotFoundException) {
+                    result.success(false)
                 }
             }
     }

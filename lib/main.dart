@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:ear_training/core/app_config.dart';
 import 'package:ear_training/core/gamification_controller.dart';
 import 'package:ear_training/ui/audio_lifecycle_guard.dart';
+import 'package:ear_training/ui/purchase_messages.dart';
 import 'package:ear_training/ui/screens/session_gate.dart';
 import 'package:ear_training/ui/screens/startup_error_screen.dart';
 import 'package:ear_training/services/supabase_service.dart';
@@ -60,11 +61,16 @@ void main() async {
 class EarTrainingApp extends StatelessWidget {
   const EarTrainingApp({super.key});
 
+  /// Avisos que chegam fora da tela que os causou (resposta da compra na Play).
+  static final GlobalKey<ScaffoldMessengerState> messengerKey =
+      GlobalKey<ScaffoldMessengerState>();
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'BOSYN — Treino auditivo',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: messengerKey,
       // Textos do sistema (voltar, menus, leitor de tela) em português (achado G4: o TalkBack
       // lia "Back, Back").
       locale: const Locale('pt', 'BR'),
@@ -74,8 +80,12 @@ class EarTrainingApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF0A0A0A),
         primaryColor: const Color(0xFF2563EB),
       ),
-      // Silencia o áudio sempre que o app sai da frente (ver AudioLifecycleGuard).
-      builder: (context, child) => AudioLifecycleGuard(child: child!),
+      // Silencia o áudio sempre que o app sai da frente (ver AudioLifecycleGuard); avisos da
+      // compra aparecem em qualquer tela (PurchaseMessages).
+      builder: (context, child) => PurchaseMessages(
+        messengerKey: messengerKey,
+        child: AudioLifecycleGuard(child: child!),
+      ),
       home: const SessionGate(),
     );
   }

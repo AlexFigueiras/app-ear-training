@@ -1,4 +1,5 @@
 import java.io.FileInputStream
+import java.util.Base64
 import java.util.Properties
 
 plugins {
@@ -16,6 +17,27 @@ val hasUploadKey = keystorePropertiesFile.exists()
 if (hasUploadKey) {
     FileInputStream(keystorePropertiesFile).use { keystoreProperties.load(it) }
 }
+
+// Valores do .env que o Flutter repassa ao Gradle (--dart-define-from-file vira -Pdart-defines,
+// cada item em base64 "CHAVE=valor"). Fonte única: o mesmo .env que o app lê (AppConfig).
+val dartDefines: Map<String, String> =
+    (project.findProperty("dart-defines") as String?)
+        ?.split(",")
+        ?.mapNotNull { entry ->
+            runCatching { String(Base64.getDecoder().decode(entry), Charsets.UTF_8) }
+                .getOrNull()
+                ?.split("=", limit = 2)
+                ?.takeIf { it.size == 2 }
+                ?.let { it[0] to it[1] }
+        }
+        ?.toMap()
+        ?: emptyMap()
+
+// ID do APP no AdMob (tem "~"), lido pelo SDK de anúncios no AndroidManifest. Sem ADMOB_APP_ID no
+// .env, vai o ID de TESTE do Google: sem um ID válido o SDK fecha o app ao abrir. Os IDs reais
+// entram só pelo botão "2 - Gerar AAB" (.github/workflows/2-gerar-aab.yml).
+val admobTestAppId = "ca-app-pub-3940256099942544~3347511713"
+val admobAppId = dartDefines["ADMOB_APP_ID"]?.takeIf { it.isNotBlank() } ?: admobTestAppId
 
 android {
     // ID definitivo do app na Play Store: não pode mudar depois do primeiro upload.
@@ -42,6 +64,7 @@ android {
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["admobAppId"] = admobAppId
 
         externalNativeBuild {
             cmake {

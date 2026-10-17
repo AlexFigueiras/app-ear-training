@@ -13,12 +13,15 @@
 import { withSupabase } from "npm:@supabase/server@1";
 
 // Ordem importa: stimulus_results e rehab_progress referenciam rehab_sessions.
+// play_subscriptions (migration 004) só guarda o vínculo token → conta; a assinatura em si é
+// cancelada pela pessoa no Google Play (o app avisa antes de excluir).
 const USER_TABLES = [
   "stimulus_results",
   "rehab_progress",
   "rehab_sessions",
   "audiograms",
   "user_profiles",
+  "play_subscriptions",
   "profiles",
 ];
 

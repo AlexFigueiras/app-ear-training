@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/legal_documents.dart';
 import '../../services/account_service.dart';
+import 'account_plan_section.dart';
 import 'legal_document_screen.dart';
 
-/// CONTA E PRIVACIDADE [LGPD/PLAY]: política de privacidade, aviso de saúde, sair e excluir a
-/// conta. Exclusão dentro do app é exigência da Google Play para apps com cadastro.
+/// CONTA E PRIVACIDADE [LGPD/PLAY]: plano, política de privacidade, aviso de saúde, sair e
+/// excluir a conta. Exclusão dentro do app é exigência da Google Play para apps com cadastro.
 class AccountScreen extends StatefulWidget {
   const AccountScreen({super.key});
 
@@ -93,7 +94,9 @@ class _AccountScreenState extends State<AccountScreen> {
           children: [
             const Text('Sua conta',
                 style: TextStyle(
-                    color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
             Text(email,
                 style: const TextStyle(color: Colors.white, fontSize: 16)),
@@ -110,6 +113,8 @@ class _AccountScreenState extends State<AccountScreen> {
                     TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
               ),
             ),
+            const SizedBox(height: 24),
+            const AccountPlanSection(),
             const SizedBox(height: 24),
             _buildAction(Icons.privacy_tip_outlined, 'Política de Privacidade',
                 _openPrivacyPolicy),
@@ -173,6 +178,13 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
           const Text(
             'Isto apaga para sempre a sua conta, o seu teste auditivo e todo o histórico de '
             'treino. Não é possível desfazer.',
+            style: TextStyle(color: Colors.white70),
+          ),
+          const SizedBox(height: 12),
+          // Política de exclusão de conta da Play: excluir a conta não cancela a cobrança.
+          const Text(
+            'Se você assina o plano PRO, cancele também a assinatura no Google Play: '
+            'excluir a conta não cancela a cobrança.',
             style: TextStyle(color: Colors.white70),
           ),
           const SizedBox(height: 16),

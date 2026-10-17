@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 /// Peças da Home revisadas pela auditoria de UX (F1 e E2): próximo passo para quem está
-/// começando, cards de treino que refletem o plano real e aviso honesto do PRO.
+/// começando e cards de treino que refletem o plano real. A oferta do PRO (assinatura ou vídeo)
+/// fica em pro_offer_sheet.dart.
 /// Contraste conferido contra #0A0A0A/#111111 (WCAG 1.4.3 e 1.4.11); nada abaixo de 14 px.
 class HomeColors {
   const HomeColors._();
@@ -124,7 +125,7 @@ class LevelCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = locked
-        ? 'Plano PRO, em breve'
+        ? 'Plano PRO ou um vídeo por sessão'
         : level.level == 2
             ? 'Grátis'
             : null;
@@ -236,73 +237,4 @@ class EmptyProgressNote extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Aviso do PRO enquanto não há compra na loja: diz o que é, que ainda não está à venda e o
-/// que fazer agora. Quando a venda existir, a folha precisa mostrar preço ("R$ X/mês"),
-/// renovação e cancelamento (App Store 3.1.2 / política de assinaturas da Google Play).
-Future<void> showProComingSoonSheet(BuildContext context) {
-  return showModalBottomSheet(
-    context: context,
-    backgroundColor: HomeColors.surface,
-    showDragHandle: true,
-    // Cresce até o tamanho do conteúdo: com a altura padrão (9/16 da tela) o botão ficava
-    // abaixo da dobra em celulares pequenos.
-    isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-    builder: (context) {
-      return SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Semantics(
-                header: true,
-                child: const Text('Plano PRO em breve',
-                    style: TextStyle(
-                        color: HomeColors.accent,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800)),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Os treinos "Voz de um lado, barulho do outro" e "Conversa no barulho" vão fazer parte do '
-                'plano PRO, que ainda não está à venda. Nada será cobrado sem a sua '
-                'confirmação na loja de aplicativos.',
-                style:
-                    TextStyle(color: Colors.white, fontSize: 16, height: 1.45),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Enquanto isso, continue com "Palavras parecidas", o treino base do programa.',
-                style: TextStyle(
-                    color: HomeColors.textSecondary,
-                    fontSize: 16,
-                    height: 1.45),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                height: 52,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: HomeColors.primaryButton,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Entendi',
-                      style:
-                          TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    },
-  );
 }
